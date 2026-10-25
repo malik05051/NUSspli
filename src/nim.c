@@ -26,6 +26,7 @@
 
 #pragma GCC diagnostic ignored "-Wundef"
 #include <coreinit/memdefaultheap.h>
+#include <coreinit/memory.h>
 #pragma GCC diagnostic pop
 
 // The C++ exports of nn_nim.rpl. WUT links them, but ships no header: the
@@ -33,11 +34,10 @@
 // a hidden pointer in r3, which is what a struct return does in C as well.
 extern NNResult NIMInitialize(void) __asm__("Initialize__Q2_2nn3nimFv");
 extern NNResult NIMFinalize(void) __asm__("Finalize__Q2_2nn3nimFv");
-extern NimTitlePackageTaskConfig NIMMakeTitlePackageTaskConfig(uint64_t titleId, int32_t regionOrLanguage, uint32_t titleType) __asm__("MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy__Q3_2nn3nim4utilFULiQ3_2nn4Cafe9TitleType");
 extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *config, const uint16_t *contents, uint32_t numContents) __asm__("RegisterTitlePackageTask__Q2_2nn3nimFRCQ3_2nn3nim22TitlePackageTaskConfigPCUsUi");
 
 // The values of nn::Cafe::TitleType are not documented, 0 is the guess for
-// an ordinary title. The region is ignored by Cemu and left at 0 as well.
+// an ordinary title.
 #define NIM_TITLE_TYPE 0
 
 // Every line goes out in front of its call as well: the last one that
@@ -50,10 +50,29 @@ NNResult nimInitialize()
     return res;
 }
 
+// The eShop fills the config with
+// nn::nim::util::MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy(), but
+// that call took a 5.5.5E console down in the step by step test, with the
+// title type above and a region of 0. Cemu only stubs it, so whatever it
+// checks or reads on a console is unknown: the config is filled here the
+// way Cemu fills it instead, which is what the eShop runs with in Cemu.
 void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
 {
-    debugPrintf("NIM: MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy(%016llX)", tid);
-    *config = NIMMakeTitlePackageTaskConfig(tid, 0, NIM_TITLE_TYPE);
+    OSBlockSet(config, 0, sizeof(NimTitlePackageTaskConfig));
+    config->titleIdHigh = (uint32_t)(tid >> 32);
+    config->titleIdLow = (uint32_t)tid;
+    config->regionOrLanguage = 0;
+    config->titleType = NIM_TITLE_TYPE;
+    // 1 is the internal memory in Cemu, the eShop reads these two to find
+    // the device of the title.
+    config->applicationBoxDevice1 = 1;
+    config->applicationBoxDevice2 = 1;
+    // Byte 0x15 is set to 1 by Cemu, its meaning is unknown.
+    ((uint8_t *)config)[0x15] = 1;
+    // Cemu notes 2 as "use the background install policy", which is what
+    // the call of the eShop is named after (its stub leaves 0).
+    config->postDownloadAction = 2;
+
     debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tid, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
 }
 

@@ -595,7 +595,7 @@ static void pdSystemDownload()
 
     // One stop in front of every call: the console crashed in the first
     // tests and the last screen before a crash names the call that did it.
-    if(!pdNimStep(txt, sizeof(txt), "1/3", "nn::nim::Initialize()", NULL))
+    if(!pdNimStep(txt, sizeof(txt), "1/2", "nn::nim::Initialize()", NULL))
         return;
 
     NNResult res = nimInitialize();
@@ -606,16 +606,12 @@ static void pdSystemDownload()
         return;
     }
 
-    if(!pdNimStep(txt, sizeof(txt), "2/3", "nn::nim::util::MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy()", NULL))
-    {
-        nimFinalize();
-        return;
-    }
-
+    // Step 2 is filled in by NUSspli itself, the system call the eShop uses
+    // for it crashed the console (see nimMakeConfig): no stop needed.
     NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
     nimMakeConfig(&config, pdTmd->tid);
 
-    if(!pdNimStep(txt, sizeof(txt), "3/3", "nn::nim::RegisterTitlePackageTask()", &config))
+    if(!pdNimStep(txt, sizeof(txt), "2/2", "nn::nim::RegisterTitlePackageTask()", &config))
     {
         nimFinalize();
         return;
