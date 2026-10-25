@@ -154,7 +154,7 @@ static void renderPDMenu()
 
     strcpy(toFrame, localise("Press " BUTTON_B " to return"));
     strcat(toFrame, " || ");
-    strcat(toFrame, localise(BUTTON_PLUS " to start"));
+    strcat(toFrame, localise(queueRunning() ? BUTTON_PLUS " to add to the download manager" : BUTTON_PLUS " to start"));
     textToFrame(--line, ALIGNED_CENTER, toFrame);
 
     lineToFrame(--line, SCREEN_COLOR_WHITE);
@@ -738,7 +738,7 @@ runPost:
         if(ret)
         {
             pdRambuf = NULL;
-            if(pdAutoStartQueue)
+            if(pdAutoStartQueue && !queueRunning())
             {
                 disableApd();
                 ret = !proccessQueue();
@@ -837,7 +837,14 @@ static void updatePDMenu()
         }
 
         if(vpad.trigger & VPAD_BUTTON_PLUS)
+        {
+            // Nothing downloads next to the download manager: the title
+            // joins its queue instead and starts in turn.
+            if(queueRunning())
+                pdToQueue = true;
+
             pdMenuActive = false;
+        }
         else if(vpad.trigger & VPAD_BUTTON_MINUS)
         {
             pdToQueue = true;
@@ -845,7 +852,7 @@ static void updatePDMenu()
         }
         else
         {
-            if(pdInstalled && vpad.trigger & VPAD_BUTTON_Y)
+            if(pdInstalled && vpad.trigger & VPAD_BUTTON_Y && !downloadManagerBusy())
             {
                 if(checkSystemTitleFromListType(&pdTitleList, true))
                 {

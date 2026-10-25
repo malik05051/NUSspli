@@ -197,5 +197,13 @@
     "unknown": "unbekannten",
     "Yes": "Ja",
     "No": "Nein",
-    "File": "Datei"
+    "File": "Datei",
+
+    "\uE002 to download in the background": "\uE002 zum Herunterladen im Hintergrund",
+    "\uE045 to show the progress": "\uE045 zum Anzeigen des Fortschritts",
+    "\uE045 to add to the download manager": "\uE045 zum Hinzufügen zum Download-Manager",
+    "Download manager": "Download-Manager",
+    "Wait for the download manager to finish first.": "Warte, bis der Download-Manager fertig ist.",
+    "The queue is empty": "Die Warteschlange ist leer",
+    "\uE002 to cancel the downloads": "\uE002 zum Abbrechen der Downloads"
 }

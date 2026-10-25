@@ -32,6 +32,7 @@
 #include <localisation.h>
 #include <menu/utils.h>
 #include <notifications.h>
+#include <queue.h>
 #include <renderer.h>
 #include <state.h>
 #include <stdio.h>
@@ -615,6 +616,15 @@ bool showExitOverlay(bool really)
 
     yesNoOverlay = ovl;
     return uiModal(&yesNoDialog, NULL) != 0;
+}
+
+bool downloadManagerBusy()
+{
+    if(!queueRunning())
+        return false;
+
+    showErrorFrame(localise("Wait for the download manager to finish first."));
+    return true;
 }
 
 bool dialogOpen()

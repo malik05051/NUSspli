@@ -72,6 +72,10 @@ extern "C"
     bool showExitOverlay(bool really);
     // True while a yes/no question of the shared dialog is on screen.
     bool dialogOpen();
+    // For what must not run next to the download manager (an install or
+    // uninstall of its own): true, with a dialog saying so, while the queue
+    // runs in the background.
+    bool downloadManagerBusy();
 
 #ifdef __cplusplus
 }

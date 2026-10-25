@@ -250,7 +250,7 @@ static void updateInstallerMenu()
         return;
     }
 
-    if(vpad.trigger & VPAD_BUTTON_PLUS)
+    if(vpad.trigger & VPAD_BUTTON_PLUS && !downloadManagerBusy())
     {
         bool finished = false;
         if(checkSystemTitleFromTid(tmd->tid, false))

@@ -82,6 +82,31 @@ extern "C"
     LIST *getTitleQueue();
     // Walks the queue and answers whether an entry with this name is in it.
     bool isQueued(const char *name);
+    // The same for an entry of the title database.
+    bool isEntryQueued(const TitleEntry *entry);
+
+    /*
+     * The download manager: startQueueInBackground() runs the queue on a
+     * thread of its own and returns at once, so the menus stay usable
+     * while it downloads and installs. Entries added in the meantime are
+     * worked through as well. The engine code is the same as for
+     * proccessQueue(): it reaches the UI through ui.h only, which hands
+     * its dialogs to the main thread and its frames to the progress screen.
+     *
+     * The main thread is the only caller of everything below.
+     */
+    bool startQueueInBackground();
+    // True until the run ended (finished, failed or cancelled).
+    bool queueRunning();
+    // Asks the run to stop. The entry it works on stays in the queue, a
+    // download resumes from where it stopped the next time.
+    void cancelQueue();
+    // The list may change under the menus while the queue runs: they hold
+    // this lock while they walk it.
+    void lockQueue();
+    void unlockQueue();
+    // The entry the run works on right now (it cannot be removed), or NULL.
+    const TitleData *getActiveQueueEntry();
 
 #ifdef __cplusplus
 }

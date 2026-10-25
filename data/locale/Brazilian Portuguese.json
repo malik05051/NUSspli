@@ -206,5 +206,13 @@
     "unknown": "Desconhecido",
     "Yes": "Sim",
     "No": "Não",
-    "File": "Arquivo"
+    "File": "Arquivo",
+
+    "\uE002 to download in the background": "\uE002 para baixar em segundo plano",
+    "\uE045 to show the progress": "\uE045 para mostrar o progresso",
+    "\uE045 to add to the download manager": "\uE045 para adicionar ao gerenciador de downloads",
+    "Download manager": "Gerenciador de downloads",
+    "Wait for the download manager to finish first.": "Aguarde o gerenciador de downloads terminar.",
+    "The queue is empty": "A fila está vazia",
+    "\uE002 to cancel the downloads": "\uE002 para cancelar os downloads"
 }

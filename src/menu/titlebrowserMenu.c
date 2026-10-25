@@ -233,7 +233,7 @@ static void renderTitleBrowserFrame()
     textToFrame(MAX_LINES - 2, ALIGNED_CENTER, toFrame);
 
     strcpy(toFrame, localise(BUTTON_Y " to search"));
-    if(getListSize(getTitleQueue()))
+    if(getListSize(getTitleQueue()) || queueRunning())
     {
         strcat(toFrame, " || ");
         strcat(toFrame, localise(BUTTON_MINUS " to open the queue"));
@@ -248,8 +248,6 @@ static void renderTitleBrowserFrame()
     size_t max = j < MAX_TITLEBROWSER_LINES ? j : MAX_TITLEBROWSER_LINES;
     size_t l;
     MCPTitleListType titleList __attribute__((__aligned__(0x40)));
-    TitleData *title;
-    bool inQueue;
     for(size_t i = 0; i < max; ++i)
     {
         l = i + 2;
@@ -276,17 +274,8 @@ static void renderTitleBrowserFrame()
         else
             strcpy(toFrame, filteredTitleEntries[j]->name);
 
-        inQueue = false;
-        forEachListEntry(getTitleQueue(), title)
-        {
-            if(title->entry == filteredTitleEntries[j])
-            {
-                inQueue = true;
-                break;
-            }
-        }
-
-        if(inQueue)
+        // The download manager changes the queue while it runs.
+        if(isEntryQueued(filteredTitleEntries[j]))
             textToFrameColoredCut(l, 10, toFrame, SCREEN_COLOR_YELLOW, (SCREEN_WIDTH - (FONT_SIZE << 1)) - (getSpaceWidth() * 11));
         else
             textToFrameCut(l, 10, toFrame, (SCREEN_WIDTH - (FONT_SIZE << 1)) - (getSpaceWidth() * 11));
@@ -463,7 +452,7 @@ static void updateTitleBrowser()
         return;
     }
 
-    if(vpad.trigger & VPAD_BUTTON_MINUS && getListSize(getTitleQueue()))
+    if(vpad.trigger & VPAD_BUTTON_MINUS && (getListSize(getTitleQueue()) || queueRunning()))
     {
         if(queueMenu())
         {

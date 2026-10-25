@@ -195,5 +195,13 @@
     "unknown": "anhysbys",
     "Yes": "Ie",
     "No": "Na",
-    "File": "Ffeil"
+    "File": "Ffeil",
+
+    "\uE002 to download in the background": "Pwyswch \uE002 i lawrlwytho yn y cefndir",
+    "\uE045 to show the progress": "Pwyswch \uE045 i ddangos y cynnydd",
+    "\uE045 to add to the download manager": "Pwyswch \uE045 i ychwanegu at y rheolwr lawrlwytho",
+    "Download manager": "Rheolwr lawrlwytho",
+    "Wait for the download manager to finish first.": "Arhoswch i'r rheolwr lawrlwytho orffen yn gyntaf.",
+    "The queue is empty": "Mae'r ciw yn wag",
+    "\uE002 to cancel the downloads": "Pwyswch \uE002 i ganslo'r lawrlwythiadau"
 }
