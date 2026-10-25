@@ -26,6 +26,7 @@
 
 #pragma GCC diagnostic ignored "-Wundef"
 #include <coreinit/mcp.h>
+#include <coreinit/thread.h>
 #pragma GCC diagnostic pop
 
 #ifdef __cplusplus
@@ -57,6 +58,17 @@ extern "C"
     bool isChannel();
 #endif
     bool AppRunning(bool mainthread) __attribute__((__hot__));
+    // The thread that runs main() and with it the UI loop.
+    bool isMainThread();
+    // The download manager runs the queue on a thread of its own (see
+    // queue.h). That thread runs engine code written for the main thread,
+    // so AppRunning(true) only observes the state there, and once the run
+    // was cancelled it answers false: that is what ends every loop of that
+    // engine code the way leaving the app does.
+    void setBackgroundThread(OSThread *thread);
+    bool isBackgroundThread();
+    void cancelBackground();
+    bool backgroundCancelled();
     void exitToHome(bool ask) __attribute__((__cold__));
     void exitOnHomePress() __attribute__((__cold__));
     void launchTitle(MCPTitleListType *title) __attribute__((__cold__));

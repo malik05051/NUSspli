@@ -74,6 +74,26 @@ extern "C"
     } DLProgressView;
     void drawDownloadProgressFrame(void *ctx);
 
+    /*
+     * The download manager. The queue thread may not draw, so uiPump and
+     * showStatusFrame copy the frame it would have drawn into a snapshot
+     * and the progress screen draws that one, see queue.h.
+     */
+
+    // Forgets the last snapshot, called before a new run starts.
+    void resetEngineFrames();
+    // Queue thread: copies the frame uiPump was handed (only the frame
+    // callbacks above, other ones keep the snapshot as it is).
+    void publishEngineFrame(UiWaitFrame frame, void *ctx);
+    // Queue thread: the text of a breadcrumb, NULL when it is gone again.
+    void publishEngineStatus(const char *text);
+    // Main thread: fills the frame with the last snapshot.
+    void drawEngineFrame();
+    // Main thread: one line about the snapshot for the menus.
+    void getEngineSummary(char *out, size_t size);
+    // Main thread: the breadcrumb of the queue thread, false when none is up.
+    bool getEngineStatus(char *out, size_t size);
+
     // Blocking dialogs, converted from the old while(AppRunning) loops.
     // true means retry (Y press or countdown expiry), false means return
     // (B press or the app stopping).
