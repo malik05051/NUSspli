@@ -487,6 +487,70 @@ exit:
     destroyList(ticketList, true);
 }
 
+bool hasTicket(uint64_t tid)
+{
+    char path[FS_MAX_PATH];
+    OSBlockMove(path, TICKET_BUCKET, sizeof(TICKET_BUCKET), false);
+    char *inSentence = path + (sizeof(TICKET_BUCKET) - 1);
+
+    FSADirectoryHandle dir;
+    if(FSAOpenDir(getFSAClient(), path, &dir) != FS_ERROR_OK)
+        return false;
+
+    // The same walk as deleteTicket(): folders of four characters, files of
+    // twelve, every file a row of tickets.
+    bool found = false;
+    FSADirectoryEntry entry;
+    FSADirectoryHandle dir2;
+    while(!found && FSAReadDir(getFSAClient(), dir, &entry) == FS_ERROR_OK)
+    {
+        if(!(entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 4)
+            continue;
+
+        strcpy(inSentence, entry.name);
+        if(FSAOpenDir(getFSAClient(), path, &dir2) != FS_ERROR_OK)
+            continue;
+
+        strcat(inSentence, "/");
+        char *fileName = inSentence + strlen(inSentence);
+        while(!found && FSAReadDir(getFSAClient(), dir2, &entry) == FS_ERROR_OK)
+        {
+            if((entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 12)
+                continue;
+
+            strcpy(fileName, entry.name);
+            void *file;
+            size_t fileSize = readFile(path, &file);
+            if(file == NULL)
+                continue;
+
+            uint8_t *fileEnd = ((uint8_t *)file) + fileSize;
+            TICKET *ticket = (TICKET *)file;
+            while(((uint8_t *)ticket) + sizeof(TICKET) <= fileEnd)
+            {
+                if(ticket->tid == tid)
+                {
+                    found = true;
+                    break;
+                }
+
+                uint8_t *ptr = ((uint8_t *)ticket) + sizeof(TICKET);
+                if(ticket->total_hdr_size > 0x14)
+                    ptr += ticket->total_hdr_size - 0x14;
+
+                ticket = (TICKET *)ptr;
+            }
+
+            MEMFreeToDefaultHeap(file);
+        }
+
+        FSACloseDir(getFSAClient(), dir2);
+    }
+
+    FSACloseDir(getFSAClient(), dir);
+    return found;
+}
+
 bool hasMagicHeader(const TICKET *ticket)
 {
     for(size_t i = 0; i < sizeof(magic_header); ++i)

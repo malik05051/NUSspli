@@ -183,6 +183,8 @@ extern "C"
     bool generateCert(const TMD *tmd, const TICKET *ticket, size_t ticketSize, const char *path);
     void generateFakeTicket();
     void deleteTicket(uint64_t tid);
+    // Whether the ticket store of the console holds a ticket for the title.
+    bool hasTicket(uint64_t tid);
     bool hasMagicHeader(const TICKET *ticket);
 
 #ifdef __cplusplus

@@ -207,5 +207,18 @@
     "unknown": "desconocido",
     "Yes": "Sí",
     "No": "No",
-    "File": "Archivo"
+    "File": "Archivo",
+
+    "\uE002 to download in the background": "\uE002 para descargar en segundo plano",
+    "\uE045 to show the progress": "\uE045 para mostrar el progreso",
+    "\uE045 to add to the download manager": "\uE045 para añadir al gestor de descargas",
+    "Download manager": "Gestor de descargas",
+    "Wait for the download manager to finish first.": "Espera a que el gestor de descargas termine.",
+    "The queue is empty": "La cola está vacía",
+    "\uE002 to cancel the downloads": "\uE002 para cancelar las descargas",
+
+    "\uE002 to use the Wii U Download Management": "\uE002 para usar la gestión de descargas de Wii U",
+    "Added to the Wii U Download Management!": "¡Añadido a la gestión de descargas de Wii U!",
+    "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "No hay ningún ticket de este título en la consola,\nasí que la gestión de descargas de Wii U probablemente no podrá instalarlo.\n\n¿Añadirlo de todos modos?",
+    "The Wii U Download Management refused the title.": "La gestión de descargas de Wii U ha rechazado el título."
 }

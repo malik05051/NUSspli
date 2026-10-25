@@ -32,9 +32,11 @@
 #include <localisation.h>
 #include <menu/utils.h>
 #include <notifications.h>
+#include <queue.h>
 #include <renderer.h>
 #include <state.h>
 #include <stdio.h>
+#include <thread.h>
 #include <titles.h>
 #include <tmd.h>
 #include <ui.h>
@@ -48,14 +50,31 @@
 #pragma GCC diagnostic pop
 
 static LIST *logList = NULL;
+// The queue thread of the download manager writes to the log while the
+// menus draw it, so every access to the list goes through this lock.
+static spinlock logLock = SPINLOCK_FREE;
+// The first line below the log, see reserveScreenLogLines.
+static int logEnd = MAX_LINES;
 
 void addToScreenLog(const char *str, ...)
 {
+    char text[MAX_CHARS + 2];
+    va_list va;
+    va_start(va, str);
+    vsnprintf(text, sizeof(text), str, va);
+    va_end(va);
+
+    debugPrintf("%s", text);
+
+    spinLockAsMutex(logLock);
     if(logList == NULL)
     {
         logList = createList();
         if(logList == NULL)
+        {
+            spinReleaseLock(logLock);
             return;
+        }
     }
 
     char *line;
@@ -64,31 +83,33 @@ void addToScreenLog(const char *str, ...)
     else
     {
         line = MEMAllocFromDefaultHeap(MAX_CHARS + 2);
-        if(line == NULL)
-            return;
-
-        if(!addToListEnd(logList, line))
+        if(line != NULL && !addToListEnd(logList, line))
         {
             MEMFreeToDefaultHeap(line);
-            return;
+            line = NULL;
         }
     }
 
-    va_list va;
-    va_start(va, str);
-    vsnprintf(line, MAX_CHARS + 2, str, va);
-    va_end(va);
+    if(line != NULL)
+        OSBlockMove(line, text, sizeof(text), false);
 
-    debugPrintf("%s", line);
+    spinReleaseLock(logLock);
 }
 
 void clearScreenLog()
 {
-    if(logList == NULL)
-        return;
+    spinLockAsMutex(logLock);
+    if(logList != NULL)
+    {
+        destroyList(logList, true);
+        logList = NULL;
+    }
+    spinReleaseLock(logLock);
+}
 
-    destroyList(logList, true);
-    logList = NULL;
+void reserveScreenLogLines(int lines)
+{
+    logEnd = MAX_LINES - lines;
 }
 
 void writeScreenLog(int line)
@@ -102,17 +123,23 @@ void writeScreenLog(int line)
     else
         i = 1;
 
-    if(logList == NULL)
-        return;
+    // The lines kept free at the bottom drop the oldest entries, the log
+    // still ends with the newest one.
+    i += MAX_LINES - logEnd;
 
-    const char *text;
-    forEachListEntry(logList, text)
+    spinLockAsMutex(logLock);
+    if(logList != NULL)
     {
-        if(i == 1)
-            textToFrame(++line, 0, text);
-        else
-            --i;
+        const char *text;
+        forEachListEntry(logList, text)
+        {
+            if(i == 1)
+                textToFrame(++line, 0, text);
+            else
+                --i;
+        }
     }
+    spinReleaseLock(logLock);
 }
 
 void drawErrorFrameContent(const char *text, ErrorOptions option)
@@ -209,8 +236,28 @@ static const UIScreen errorDialog = {
     .render = renderErrorDialog,
 };
 
+typedef struct
+{
+    const char *text;
+    ErrorOptions option;
+} ErrorDialogCall;
+
+static int errorDialogOnMain(void *arg)
+{
+    ErrorDialogCall *call = (ErrorDialogCall *)arg;
+    return (int)showErrorDialog(call->text, call->option);
+}
+
 ErrorOptions showErrorDialog(const char *text, ErrorOptions option)
 {
+    // The dialog state below belongs to the main thread: the queue thread
+    // hands the whole dialog over instead of only its modal loop.
+    if(!isMainThread())
+    {
+        ErrorDialogCall call = { .text = text, .option = option };
+        return (ErrorOptions)uiCallOnMain(errorDialogOnMain, &call);
+    }
+
     const char *oldText = errorDialogText;
     ErrorOptions oldOptions = errorDialogOptions;
     errorDialogText = text;
@@ -370,7 +417,10 @@ bool checkSystemTitleFromListType(MCPTitleListType *entry, bool deinstall)
 
 const char *prettyDir(const char *dir)
 {
-    static char ret[FS_MAX_PATH];
+    // One buffer per side: the queue thread of the download manager hands
+    // its result over to a whole install while the menus keep calling this.
+    static char buffers[2][FS_MAX_PATH];
+    char *ret = buffers[isMainThread() ? 0 : 1];
 
     if(strncmp(NUSDIR_USB1, dir, sizeof(NUSDIR_USB1) - 1) == 0 || strncmp(NUSDIR_USB2, dir, sizeof(NUSDIR_USB2) - 1) == 0)
     {
@@ -432,8 +482,28 @@ static const UIScreen finishedDialog = {
     .leave = leaveFinishedDialog,
 };
 
+typedef struct
+{
+    const char *titleName;
+    FINISHING_OPERATION op;
+} FinishedScreenCall;
+
+static int finishedScreenOnMain(void *arg)
+{
+    FinishedScreenCall *call = (FinishedScreenCall *)arg;
+    showFinishedScreen(call->titleName, call->op);
+    return 0;
+}
+
 void showFinishedScreen(const char *titleName, FINISHING_OPERATION op)
 {
+    if(!isMainThread())
+    {
+        FinishedScreenCall call = { .titleName = titleName, .op = op };
+        uiCallOnMain(finishedScreenOnMain, &call);
+        return;
+    }
+
     const char *text;
     switch(op)
     {
@@ -448,6 +518,9 @@ void showFinishedScreen(const char *titleName, FINISHING_OPERATION op)
             break;
         case FINISHING_OPERATION_QUEUE:
             text = localise("Queue finished successfully!");
+            break;
+        case FINISHING_OPERATION_SYSTEM_DOWNLOAD:
+            text = localise("Added to the Wii U Download Management!");
             break;
     }
 
@@ -478,8 +551,20 @@ static const UIScreen noSpaceDialog = {
     .leave = leaveNoSpaceDialog,
 };
 
+static int noSpaceOverlayOnMain(void *arg)
+{
+    showNoSpaceOverlay(*(NUSDEV *)arg);
+    return 0;
+}
+
 void showNoSpaceOverlay(NUSDEV dev)
 {
+    if(!isMainThread())
+    {
+        uiCallOnMain(noSpaceOverlayOnMain, &dev);
+        return;
+    }
+
     const char *nd;
     switch((int)dev)
     {
@@ -534,6 +619,15 @@ bool showExitOverlay(bool really)
 
     yesNoOverlay = ovl;
     return uiModal(&yesNoDialog, NULL) != 0;
+}
+
+bool downloadManagerBusy()
+{
+    if(!queueRunning())
+        return false;
+
+    showErrorFrame(localise("Wait for the download manager to finish first."));
+    return true;
 }
 
 bool dialogOpen()

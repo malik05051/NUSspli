@@ -115,6 +115,12 @@
 static bool initialised = false;
 static CURL *curl;
 static char curlError[CURL_ERROR_SIZE];
+// The handle of the side downloads, see downloadFile(). The lock is held
+// for a whole side download and around the teardown and the setup of the
+// network, so neither can pull the handle away from under the other.
+static CURL *sideCurl = NULL;
+static char sideCurlError[CURL_ERROR_SIZE];
+static spinlock sideLock = SPINLOCK_FREE;
 static OSThread *socketPoolThread = NULL;
 static bool socketPoolDonated = false;
 
@@ -164,11 +170,12 @@ static void setStreamCount(int streams)
 // failed, so the next attempt has to connect on its own.
 //
 // Every handle goes through here, the stream handles included: they are
-// configured once in initParallel() and so never got this.
-static void setFreshConnect(bool fresh)
+// configured once in initParallel() and so never got this. They belong to
+// the shared handle; a side download only sets its own.
+static void setFreshConnect(CURL *handle, bool fresh)
 {
-    CURLcode ret = curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, fresh ? 1L : 0L);
-    for(int i = 0; ret == CURLE_OK && i < DL_MAX_SLOTS && dlHandles[i] != NULL; ++i)
+    CURLcode ret = curl_easy_setopt(handle, CURLOPT_FRESH_CONNECT, fresh ? 1L : 0L);
+    for(int i = 0; handle == curl && ret == CURLE_OK && i < DL_MAX_SLOTS && dlHandles[i] != NULL; ++i)
         ret = curl_easy_setopt(dlHandles[i], CURLOPT_FRESH_CONNECT, fresh ? 1L : 0L);
 
     if(ret != CURLE_OK)
@@ -404,7 +411,9 @@ static void resetNetwork()
     // with the UDP log restart itself, so there is nothing left to finish or
     // restart here; the reconnect below re-donates the pool through
     // initDownloader().
+    spinLockAsMutex(sideLock);
     deinitDownloader();
+    spinReleaseLock(sideLock);
     NNResult nnres;
     BOOL con;
 
@@ -480,7 +489,9 @@ reconnect:
                 if(con)
                 {
                     set_multicast_state(true);
+                    spinLockAsMutex(sideLock);
                     initDownloader();
+                    spinReleaseLock(sideLock);
 
                     if(ovl)
                         uiHideOverlay(ovl);
@@ -509,7 +520,10 @@ reconnect:
     }
 
 exitApp:
-    if(AppRunning(true))
+    // Without a network the app has nothing left to do - unless this is the
+    // queue thread of the download manager: its run ends here, the menus
+    // stay and the next download asks for the network again.
+    if(AppRunning(true) && isMainThread())
         exitToHome(false);
 }
 
@@ -623,6 +637,17 @@ bool initDownloader()
     setOpt(CURLOPT_PROXY, pUrl2);
 #undef setOpt
 
+    // The handle of the side downloads, a copy of the one set up above. A
+    // failure costs nothing but the side downloads, which report it then.
+    sideCurl = curl_easy_duphandle(curl);
+#ifdef NUSSPLI_DEBUG
+    if(sideCurl != NULL)
+    {
+        sideCurlError[0] = '\0';
+        curl_easy_setopt(sideCurl, CURLOPT_ERRORBUFFER, sideCurlError);
+    }
+#endif
+
     initSocketPool();
     initParallel();
 
@@ -660,6 +685,11 @@ void deinitDownloader()
     deinitParallel();
     debugPrintf("Parallel streams closed");
 
+    if(sideCurl != NULL)
+    {
+        curl_easy_cleanup(sideCurl);
+        sideCurl = NULL;
+    }
     if(curl != NULL)
     {
         curl_easy_cleanup(curl);
@@ -675,7 +705,7 @@ void deinitDownloader()
 static int dlThreadMain(int argc, const char **argv)
 {
     debugPrintf("Download thread spawned!");
-    argc = curl_easy_perform(curl);
+    argc = curl_easy_perform((CURL *)argv[1]);
     ((curlProgressData *)argv[0])->running = false;
     return argc;
 }
@@ -1110,7 +1140,7 @@ static void urlHost(const char *url, char *out, size_t len)
     out[hostLen] = '\0';
 }
 
-int downloadFile(const char *url, char *file, downloadData *data, FileType type, bool resume, QUEUE_DATA *queueData, RAMBUF *rambuf)
+static int downloadFileOn(bool side, const char *url, char *file, downloadData *data, FileType type, bool resume, QUEUE_DATA *queueData, RAMBUF *rambuf)
 {
     // Results: 0 = OK | 1 = Error | 2 = No ticket aviable | 3 = Exit
     // Types: 0 = .app | 1 = .h3 | 2 = title.tmd | 3 = tilte.tik
@@ -1154,10 +1184,18 @@ int downloadFile(const char *url, char *file, downloadData *data, FileType type,
     // 0 = not measured yet.
     static int rampPinned = 0;
     static char rampHost[64];
+    // The queue thread of the download manager reads no buttons and owns
+    // no overlay, see the cancel question below.
+    const bool onMain = isMainThread();
 
 retry:
     debugPrintf("Download URL: %s", url);
     debugPrintf("Download PATH: %s", rambuf ? "<RAM>" : file);
+
+    // Read after the label: a reset of the network creates the shared
+    // handle anew before it jumps back here.
+    CURL *const handle = side ? sideCurl : curl;
+    char *const errBuf = side ? sideCurlError : curlError;
 
     char *name;
     if(rambuf)
@@ -1227,7 +1265,7 @@ retry:
     if(fp == NULL)
         return 1;
 
-    curlError[0] = '\0';
+    errBuf[0] = '\0';
     volatile curlProgressData cdata = {
         .running = true,
         .error = CURLE_OK,
@@ -1264,16 +1302,18 @@ retry:
     // frame shows is rewritten below before the first pump - which is also
     // what keeps the ETA of the file before out of the picture - and the
     // block stays above transfer: so the parallel chunks hand it over
-    // untouched, see the note on oldBps above.
-    static DLProgressView view;
-    view.data = data;
-    view.queueData = queueData;
-    view.name = name;
-    view.dlnow = 0;
-    view.dltotal = 0;
-    view.fileEta = UINT32_MAX;
-    view.bps = 0.0;
-    view.preparing = true;
+    // untouched, see the note on oldBps above. One view per thread: a
+    // side download of the menus runs next to the queue thread.
+    static DLProgressView views[2];
+    DLProgressView *const view = views + (onMain ? 0 : 1);
+    view->data = data;
+    view->queueData = queueData;
+    view->name = name;
+    view->dlnow = 0;
+    view->dltotal = 0;
+    view->fileEta = UINT32_MAX;
+    view->bps = 0.0;
+    view->preparing = true;
 
 transfer:
     // Only content files are worth splitting: they are the big ones, their size is
@@ -1319,25 +1359,25 @@ transfer:
     CURLoption opt = CURLOPT_URL;
     CURLcode ret = CURLE_OK;
     if(!parallel)
-        ret = curl_easy_setopt(curl, opt, url);
+        ret = curl_easy_setopt(handle, opt, url);
     if(!parallel && ret == CURLE_OK)
     {
         opt = CURLOPT_RESUME_FROM_LARGE;
-        ret = curl_easy_setopt(curl, opt, (curl_off_t)fileSize);
+        ret = curl_easy_setopt(handle, opt, (curl_off_t)fileSize);
         if(ret == CURLE_OK)
         {
             opt = CURLOPT_WRITEFUNCTION;
 #pragma GCC diagnostic ignored "-Wcast-function-type"
-            ret = curl_easy_setopt(curl, opt, rambuf ? fwrite : (size_t (*)(const void *, size_t, size_t, FILE *))sequentialWrite);
+            ret = curl_easy_setopt(handle, opt, rambuf ? fwrite : (size_t (*)(const void *, size_t, size_t, FILE *))sequentialWrite);
 #pragma GCC diagnostic pop
             if(ret == CURLE_OK)
             {
                 opt = CURLOPT_WRITEDATA;
-                ret = curl_easy_setopt(curl, opt, rambuf ? (FILE *)fp : (FILE *)&target);
+                ret = curl_easy_setopt(handle, opt, rambuf ? (FILE *)fp : (FILE *)&target);
                 if(ret == CURLE_OK)
                 {
                     opt = CURLOPT_XFERINFODATA;
-                    ret = curl_easy_setopt(curl, opt, &cdata);
+                    ret = curl_easy_setopt(handle, opt, &cdata);
                 }
             }
         }
@@ -1350,23 +1390,25 @@ transfer:
         else
             addToIOQueue(NULL, 0, 0, (FSAFileHandle)fp);
 
-        debugPrintf("curl_easy_setopt error: %s (%d / %u / %ud)", curlError, ret, opt, fileSize);
+        debugPrintf("curl_easy_setopt error: %s (%d / %u / %ud)", errBuf, ret, opt, fileSize);
         return 1;
     }
 
     OSTime t = OSGetSystemTime();
     phaseTick = OSGetTick();
     phaseStop = false;
-    setStreamCount(want);
+    // The stream count belongs to the queue, a side download never splits.
+    if(!side)
+        setStreamCount(want);
 
     // A failure leaves a connection behind that the next attempt must not take up.
-    setFreshConnect(!reuseCache);
+    setFreshConnect(handle, !reuseCache);
 
     if(ramping)
         debugPrintf("Ramp[phase=%d/streams=%d] begin at offset %u", rampPhase, want, (unsigned int)fileSize);
 
     dlJob job;
-    char *argv[1];
+    char *argv[2];
     OSThread *dlThread;
     if(parallel)
     {
@@ -1383,7 +1425,8 @@ transfer:
     {
         debugPrintf("Calling curl_easy_perform()");
         argv[0] = (char *)&cdata;
-        dlThread = startThread("NUSspli downloader", THREAD_PRIORITY_HIGH, STACKSIZE_BIG, dlThreadMain, 1, (char *)argv, OS_THREAD_ATTRIB_AFFINITY_CPU0);
+        argv[1] = (char *)handle;
+        dlThread = startThread("NUSspli downloader", THREAD_PRIORITY_HIGH, STACKSIZE_BIG, dlThreadMain, 2, (char *)argv, OS_THREAD_ATTRIB_AFFINITY_CPU0);
     }
 
     if(dlThread == NULL)
@@ -1411,8 +1454,8 @@ transfer:
             }
 
             ts = cdata.ts;
-            view.dltotal = cdata.dltotal;
-            view.dlnow = cdata.dlnow;
+            view->dltotal = cdata.dltotal;
+            view->dlnow = cdata.dlnow;
             spinReleaseLock(cdata.lock);
 
             // The total belongs to the file and not to the phase: it is the same
@@ -1420,28 +1463,28 @@ transfer:
             // reports none until libCURL has answered for its range. Keep the one
             // the file already had - a bar that divides by nothing is what dropped
             // to zero on every handover.
-            if(view.dltotal)
+            if(view->dltotal)
             {
-                view.dltotal += fileSize;
-                shownTotal = view.dltotal;
+                view->dltotal += fileSize;
+                shownTotal = view->dltotal;
             }
             else
-                view.dltotal = shownTotal;
+                view->dltotal = shownTotal;
 
             if(ramping && !phaseStop)
             {
                 uint32_t ms = (uint32_t)OSTicksToMilliseconds(OSGetTick() - phaseTick);
-                if(ms >= RAMP_MAX_MS || (ms >= RAMP_MIN_MS && view.dlnow >= RAMP_MIN_BYTES))
+                if(ms >= RAMP_MAX_MS || (ms >= RAMP_MIN_MS && view->dlnow >= RAMP_MIN_BYTES))
                 {
-                    debugPrintf("Ramp[phase=%d] cap reached: bytes=%u ms=%u", rampPhase, (unsigned int)view.dlnow, ms);
+                    debugPrintf("Ramp[phase=%d] cap reached: bytes=%u ms=%u", rampPhase, (unsigned int)view->dlnow, ms);
                     phaseStop = true;
                     cdata.error = CURLE_ABORTED_BY_CALLBACK;
                 }
             }
 
-            view.bps = view.dlnow - downloaded;
-            downloaded = view.dlnow;
-            view.dlnow += fileSize;
+            view->bps = view->dlnow - downloaded;
+            downloaded = view->dlnow;
+            view->dlnow += fileSize;
 
             // A phase that took over starts its raw count at zero while the
             // offset only grew by what the queue had taken, so the sum drops by
@@ -1449,10 +1492,10 @@ transfer:
             // figure the screen already showed and let the fresh phase climb on
             // from there. The last sample of the file is its total, which is at
             // or above every figure before it, so the clamp lets go in time.
-            if(view.dlnow < shownFile)
-                view.dlnow = shownFile;
+            if(view->dlnow < shownFile)
+                view->dlnow = shownFile;
             else
-                shownFile = view.dlnow;
+                shownFile = view->dlnow;
 
             // Calculate download speed. Only a window the clock can divide
             // gets a rate of its own. A window without a new tick passes the
@@ -1466,7 +1509,7 @@ transfer:
                 // file, the rate before a ramp phase switch in the middle of
                 // one - and take the fresh tick as the reference, so the
                 // first bytes of the file are measured against it.
-                view.bps = oldBps;
+                view->bps = oldBps;
                 lastTransfair = ts;
             }
             else
@@ -1474,14 +1517,14 @@ transfer:
                 tmp = OSTicksToMilliseconds(ts - lastTransfair); // sample duration in milliseconds
                 if(tmp)
                 {
-                    view.bps *= 1000.0f; // secs to ms.
-                    view.bps /= tmp; // byte/s
+                    view->bps *= 1000.0f; // secs to ms.
+                    view->bps /= tmp; // byte/s
 
                     // Smoothing
-                    view.bps *= 1.0f - SMOOTHING_FACTOR;
+                    view->bps *= 1.0f - SMOOTHING_FACTOR;
                     oldBps *= SMOOTHING_FACTOR;
-                    view.bps += oldBps;
-                    oldBps = view.bps;
+                    view->bps += oldBps;
+                    oldBps = view->bps;
 
                     // Only a window that could be divided becomes the
                     // reference of the next one.
@@ -1496,7 +1539,7 @@ transfer:
                     // such a window empty. Age the last figure by one
                     // smoothing step instead of dropping it to zero.
                     oldBps *= SMOOTHING_FACTOR;
-                    view.bps = oldBps;
+                    view->bps = oldBps;
                 }
             }
 
@@ -1504,13 +1547,13 @@ transfer:
             // first because they can post their own overlay, then the sampled
             // values are handed over and the frame is filled and presented in
             // one go.
-            if(view.dltotal)
+            if(view->dltotal)
             {
                 if(!rambuf)
                     checkForQueueErrors();
 
                 frames = FRAMERATE;
-                view.preparing = false;
+                view->preparing = false;
             }
             else
                 frames = 1;
@@ -1519,7 +1562,12 @@ transfer:
         // The sampler runs once a second, the frame does not: redrawing it
         // on every pump is what lets the bars glide towards the new sample
         // instead of jumping with it.
-        uiPump(drawDownloadProgressFrame, &view);
+        uiPump(drawDownloadProgressFrame, view);
+
+        // The queue thread is cancelled from the progress screen of the
+        // download manager, which ends the loop through AppRunning().
+        if(!onMain)
+            continue;
 
         if(cancelOverlay == NULL)
         {
@@ -1547,6 +1595,12 @@ transfer:
         }
     }
 
+    // A cancelled queue thread leaves the loop with the transfer still
+    // running, and the transfer threads cannot see that cancel: AppRunning()
+    // only answers it to the queue thread itself.
+    if(cdata.running && cdata.error == CURLE_OK)
+        cdata.error = CURLE_ABORTED_BY_CALLBACK;
+
     stopThread(dlThread, (int *)&ret);
 
     t = OSGetSystemTime() - t;
@@ -1556,7 +1610,7 @@ transfer:
     // while the cancel question was still there. The guard used to be
     // data == NULL, which is not that state: a content file or a title.tik
     // with progress data asks the same question and outlives it the same way.
-    if(cancelOverlay != NULL)
+    if(onMain && cancelOverlay != NULL)
         closeCancelOverlay();
 
     debugPrintf("curl_easy_perform() returned: %d", ret);
@@ -1663,7 +1717,7 @@ transfer:
 
     if(ret != CURLE_OK)
     {
-        debugPrintf("curl_easy_perform returned an error: %s (%d/%d)\nFile: %s", curlError, ret, cdata.error, rambuf ? "<RAM>" : file);
+        debugPrintf("curl_easy_perform returned an error: %s (%d/%d)\nFile: %s", errBuf, ret, cdata.error, rambuf ? "<RAM>" : file);
 
         if(ret == CURLE_ABORTED_BY_CALLBACK)
         {
@@ -1686,7 +1740,7 @@ transfer:
         // next attempt must not take it up again.
         reuseCache = false;
 
-        const char *te = translateCurlError(ret, curlError);
+        const char *te = translateCurlError(ret, errBuf);
         switch(ret)
         {
             case CURLE_RANGE_ERROR:
@@ -1745,8 +1799,18 @@ transfer:
                 break;
         }
 
-        if(data != NULL && cancelOverlay != NULL)
+        if(onMain && data != NULL && cancelOverlay != NULL)
             closeCancelOverlay();
+
+        // The network belongs to the queue while it runs: a side download
+        // retries on what is there instead of resetting it.
+        if(side)
+        {
+            if(showNetworkError(toScreen))
+                goto retry;
+
+            return 1;
+        }
 
         if(showNetworkError(toScreen))
         {
@@ -1767,7 +1831,7 @@ transfer:
     long resp = 200;
     if(!parallel)
     {
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &resp);
+        curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &resp);
         if(resp == 206) // Resumed download OK
             resp = 200;
     }
@@ -1831,7 +1895,7 @@ transfer:
             dld = (curl_off_t)(data->cs - fileSize);
         else
         {
-            ret = curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &dld);
+            ret = curl_easy_getinfo(handle, CURLINFO_SIZE_DOWNLOAD_T, &dld);
             if(ret != CURLE_OK)
                 dld = 0;
         }
@@ -1847,6 +1911,48 @@ transfer:
     sprintf(toScreen, "Download %s finished!", name);
     addToScreenLog(toScreen);
     return 0;
+}
+
+int downloadFile(const char *url, char *file, downloadData *data, FileType type, bool resume, QUEUE_DATA *queueData, RAMBUF *rambuf)
+{
+    // While the download manager runs the queue on its thread, the menus
+    // still fetch what they need to show a title (its title.tmd). Such a
+    // side download uses a handle of its own, runs on a single stream and
+    // leaves the network alone: the parallel engine, the stream count and
+    // the reset of the network belong to the queue.
+    if(!isMainThread() || !queueRunning())
+    {
+        // The queue thread gives up on a network it cannot reconnect and
+        // leaves the downloader torn down, see resetNetwork().
+        if(!initialised)
+        {
+            if(isMainThread())
+                resetNetwork();
+
+            if(!initialised)
+                return 1;
+        }
+
+        return downloadFileOn(false, url, file, data, type, resume, queueData, rambuf);
+    }
+
+    if(rambuf == NULL)
+    {
+        debugPrintf("Only RAM downloads may run next to the queue!");
+        return 1;
+    }
+
+    spinLockAsMutex(sideLock);
+    if(!initialised || sideCurl == NULL)
+    {
+        spinReleaseLock(sideLock);
+        showErrorFrame(localise("Error connecting to network!"));
+        return 1;
+    }
+
+    int ret = downloadFileOn(true, url, file, data, type, resume, queueData, rambuf);
+    spinReleaseLock(sideLock);
+    return ret;
 }
 
 bool downloadTitle(const TMD *tmd, size_t tmdSize, const TitleEntry *titleEntry, const char *titleVer, char *folderName, bool inst, NUSDEV dlDev, bool toUSB, bool keepFiles, QUEUE_DATA *queueData)
@@ -2097,7 +2203,7 @@ bool downloadTitle(const TMD *tmd, size_t tmdSize, const TitleEntry *titleEntry,
         }
     }
 
-    if(cancelOverlay != NULL)
+    if(isMainThread() && cancelOverlay != NULL)
         closeCancelOverlay();
 
     if(!AppRunning(true))

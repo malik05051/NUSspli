@@ -25,6 +25,11 @@ extern "C"
 {
 #endif
     bool queueMenu();
+    // The progress of the queue running in the background, see queue.h.
+    void queueProgressMenu();
+    // The entry of the main menu: the progress while the queue runs in the
+    // background, the queue otherwise.
+    void downloadManagerMenu();
 #ifdef __cplusplus
 }
 #endif

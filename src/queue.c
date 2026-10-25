@@ -22,17 +22,34 @@
 #include <string.h>
 
 #include <downloader.h>
+#include <filesystem.h>
 #include <installer.h>
 #include <list.h>
+#include <menu/engineFrames.h>
 #include <menu/utils.h>
 #include <queue.h>
 #include <state.h>
+#include <thread.h>
+#include <utils.h>
 
 #pragma GCC diagnostic ignored "-Wundef"
 #include <coreinit/memdefaultheap.h>
 #pragma GCC diagnostic pop
 
 static LIST *titleQueue;
+
+// The download manager: the queue can run on a thread of its own while the
+// menus stay usable, and they keep adding to it and removing from it in the
+// meantime. Every access to the list goes through this lock.
+static spinlock queueLock = SPINLOCK_FREE;
+// The entry the queue works on right now. It stays in the list so the menus
+// can show it, but they may not remove it.
+static TitleData *volatile activeTitle = NULL;
+static OSThread *queueThread = NULL;
+static volatile bool queueThreadDone = false;
+static QUEUE_DATA backgroundData;
+
+static void stopBackgroundQueue();
 
 bool initQueue()
 {
@@ -42,77 +59,111 @@ bool initQueue()
 
 void shutdownQueue()
 {
+    // The steps torn down after this one are what the queue thread uses.
+    stopBackgroundQueue();
     clearQueue();
     destroyList(titleQueue, false);
+}
+
+void lockQueue()
+{
+    spinLockAsMutex(queueLock);
+}
+
+void unlockQueue()
+{
+    spinReleaseLock(queueLock);
+}
+
+const TitleData *getActiveQueueEntry()
+{
+    return activeTitle;
 }
 
 int addToQueue(TitleData *data)
 {
     TitleData *title;
+    int ret = 0;
+    lockQueue();
     forEachListEntry(titleQueue, title)
     {
         if(data->operation & OPERATION_INSTALL && title->operation & OPERATION_INSTALL)
         {
             if(data->toUSB == title->toUSB && data->tmd->tid == title->tmd->tid)
-                return 2;
+            {
+                ret = 2;
+                goto unlock;
+            }
         }
         if(data->operation & OPERATION_DOWNLOAD && title->operation & OPERATION_DOWNLOAD)
         {
             if(data->dlDev == title->dlDev && data->tmd->tid == title->tmd->tid)
-                return 3;
+            {
+                ret = 3;
+                goto unlock;
+            }
         }
     }
 
-    return addToListEnd(titleQueue, data) ? 1 : 0;
+    ret = addToListEnd(titleQueue, data) ? 1 : 0;
+unlock:
+    unlockQueue();
+    return ret;
+}
+
+static inline void freeTitle(TitleData *title)
+{
+    if(title->rambuf != NULL)
+        freeRamBuf(title->rambuf);
+    else
+        MEMFreeToDefaultHeap(title->tmd);
+
+    MEMFreeToDefaultHeap(title);
 }
 
 static inline void removeFQ(TitleData *title)
 {
     if(title != NULL)
     {
+        lockQueue();
         removeFromList(titleQueue, title);
-        if(title->rambuf != NULL)
-            freeRamBuf(title->rambuf);
-        else
-            MEMFreeToDefaultHeap(title->tmd);
-
-        MEMFreeToDefaultHeap(title);
+        unlockQueue();
+        freeTitle(title);
     }
 }
 
-bool proccessQueue()
+// What an entry needs: sizes[0] on USB, sizes[1] on the SD card and
+// sizes[2] on NAND, and the bytes to download into queueData (may be NULL).
+static void addTitleSizes(const TitleData *title, uint64_t sizes[3], QUEUE_DATA *queueData)
 {
-    TitleData *title;
-    uint64_t sizes[3] = { 0, 0, 0 };
-    QUEUE_DATA queueData = { .downloaded = 0, .dlSize = 0, .packages = 0, .current = 0, .eta = -1 };
-
-    forEachListEntry(titleQueue, title)
+    for(uint16_t i = 0; i < title->tmd->num_contents; ++i)
     {
+        if(title->operation & OPERATION_INSTALL)
+            sizes[title->toUSB ? 0 : 2] += title->tmd->contents[i].size;
+
         if(title->operation & OPERATION_DOWNLOAD)
-            queueData.packages++;
-        for(uint16_t i = 0; i < title->tmd->num_contents; ++i)
         {
-            if(title->operation & OPERATION_INSTALL)
-                sizes[title->toUSB ? 0 : 2] += title->tmd->contents[i].size;
-
-            if(title->operation & OPERATION_DOWNLOAD)
+            if(queueData != NULL)
             {
-                queueData.dlSize += title->tmd->contents[i].size;
+                queueData->dlSize += title->tmd->contents[i].size;
                 if(title->tmd->contents[i].type & TMD_CONTENT_TYPE_HASHED)
-                    queueData.dlSize += getH3size(title->tmd->contents[i].size);
+                    queueData->dlSize += getH3size(title->tmd->contents[i].size);
+            }
 
-                if(title->keepFiles)
-                {
-                    int j = title->dlDev & NUSDEV_USB ? 0 : (title->dlDev & NUSDEV_SD ? 1 : 2);
-                    if(title->tmd->contents[i].type & TMD_CONTENT_TYPE_HASHED)
-                        sizes[j] += getH3size(title->tmd->contents[i].size);
+            if(title->keepFiles)
+            {
+                int j = title->dlDev & NUSDEV_USB ? 0 : (title->dlDev & NUSDEV_SD ? 1 : 2);
+                if(title->tmd->contents[i].type & TMD_CONTENT_TYPE_HASHED)
+                    sizes[j] += getH3size(title->tmd->contents[i].size);
 
-                    sizes[j] += title->tmd->contents[i].size;
-                }
+                sizes[j] += title->tmd->contents[i].size;
             }
         }
     }
+}
 
+static bool checkSizes(const uint64_t sizes[3])
+{
     for(int i = 0; i < 3; ++i)
     {
         if(sizes[i] != 0)
@@ -135,51 +186,196 @@ bool proccessQueue()
         }
     }
 
-    TitleData *last = NULL;
-    disableApd();
+    return true;
+}
+
+// Main thread, before a run: is there room for the whole queue?
+static bool checkQueueSpace()
+{
+    TitleData *title;
+    uint64_t sizes[3] = { 0, 0, 0 };
+
+    lockQueue();
     forEachListEntry(titleQueue, title)
+        addTitleSizes(title, sizes, NULL);
+    unlockQueue();
+
+    return checkSizes(sizes);
+}
+
+// Works through the queue from its head until it is empty, on whichever
+// thread calls it. Finished entries leave the list, a failed one stays.
+static bool runQueue(QUEUE_DATA *queueData)
+{
+    TitleData *title;
+    TitleData *entry;
+    const bool background = !isMainThread();
+    bool ret = false;
+
+    disableApd();
+    while(AppRunning(true))
     {
-        removeFQ(last);
-        if(!AppRunning(true))
-            goto exitApd;
+        // Entries may come in while the queue runs, so the totals are
+        // counted anew for every title: the bytes of the titles before
+        // are in downloaded already.
+        lockQueue();
+        title = getContent(titleQueue, 0);
+        activeTitle = title;
+        if(title != NULL)
+        {
+            queueData->packages = queueData->current;
+            queueData->dlSize = queueData->downloaded;
+            forEachListEntry(titleQueue, entry)
+            {
+                if(entry->operation & OPERATION_DOWNLOAD)
+                    queueData->packages++;
+
+                uint64_t unused[3] = { 0, 0, 0 };
+                addTitleSizes(entry, unused, queueData);
+            }
+        }
+        unlockQueue();
+
+        if(title == NULL)
+        {
+            ret = true;
+            break;
+        }
+
+        // The whole queue was checked before the run, but not what came
+        // in while it ran.
+        if(background)
+        {
+            uint64_t sizes[3] = { 0, 0, 0 };
+            addTitleSizes(title, sizes, NULL);
+            if(!checkSizes(sizes))
+                break;
+        }
 
         if(title->operation & OPERATION_DOWNLOAD)
         {
-            queueData.current++;
+            queueData->current++;
 
-            if(!downloadTitle(title->tmd, title->tmdSize, title->entry, title->titleVer, title->folderName, title->operation & OPERATION_INSTALL, title->dlDev, title->toUSB, title->keepFiles, &queueData))
-                goto exitApd;
+            if(!downloadTitle(title->tmd, title->tmdSize, title->entry, title->titleVer, title->folderName, title->operation & OPERATION_INSTALL, title->dlDev, title->toUSB, title->keepFiles, queueData))
+                break;
         }
         else if(title->operation & OPERATION_INSTALL)
         {
             bool hasDeps = title->tmd != NULL && (isDLC(title->tmd->tid) || isUpdate(title->tmd->tid));
             if(!install(title->entry == NULL ? prettyDir(title->folderName) : title->entry->name, hasDeps, title->dlDev, title->folderName, title->toUSB, title->keepFiles, title->tmd))
-                goto exitApd;
+                break;
         }
 
-        last = title;
+        activeTitle = NULL;
+        removeFQ(title);
     }
 
-    removeFQ(last);
+    activeTitle = NULL;
     enableApd();
+    return ret;
+}
+
+bool proccessQueue()
+{
+    if(queueRunning())
+        return false;
+
+    QUEUE_DATA queueData = { .downloaded = 0, .dlSize = 0, .packages = 0, .current = 0, .eta = -1 };
+    if(!checkQueueSpace())
+        return false;
+
+    return runQueue(&queueData);
+}
+
+static int queueThreadMain(int argc, const char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    // A cancelled run ends without the dialog: uiCallOnMain() withdraws it.
+    if(runQueue(&backgroundData))
+        showFinishedScreen(NULL, FINISHING_OPERATION_QUEUE);
+
+    queueThreadDone = true;
+    return 0;
+}
+
+bool startQueueInBackground()
+{
+    if(queueRunning() || getListSize(titleQueue) == 0)
+        return false;
+
+    if(!checkQueueSpace())
+        return false;
+
+    // The first query of the SD card joins the thread that measures it,
+    // and two threads must not join one: the queue thread asks as well.
+    checkSpaceThread();
+
+    backgroundData.downloaded = 0;
+    backgroundData.dlSize = 0;
+    backgroundData.packages = 0;
+    backgroundData.current = 0;
+    backgroundData.eta = -1;
+    resetEngineFrames();
+    queueThreadDone = false;
+
+    // Prepared and resumed in two steps: the thread has to be known as the
+    // background thread (see AppRunning) before its first line runs.
+    queueThread = prepareThread("NUSspli queue", THREAD_PRIORITY_MEDIUM, STACKSIZE_BIG, queueThreadMain, 0, NULL, OS_THREAD_ATTRIB_AFFINITY_CPU0);
+    if(queueThread == NULL)
+        return false;
+
+    setBackgroundThread(queueThread);
+    OSResumeThread(queueThread);
     return true;
-exitApd:
-    enableApd();
-    return false;
+}
+
+bool queueRunning()
+{
+    // The thread cannot free itself, so the main thread collects it the
+    // first time it asks after the run ended.
+    if(queueThread != NULL && queueThreadDone && isMainThread())
+    {
+        stopThread(queueThread, NULL);
+        queueThread = NULL;
+        setBackgroundThread(NULL);
+    }
+
+    return queueThread != NULL;
+}
+
+void cancelQueue()
+{
+    if(queueRunning())
+        cancelBackground();
+}
+
+static void stopBackgroundQueue()
+{
+    if(queueThread == NULL)
+        return;
+
+    cancelBackground();
+    stopThread(queueThread, NULL);
+    queueThread = NULL;
+    setBackgroundThread(NULL);
 }
 
 bool removeFromQueue(uint32_t index)
 {
-    TitleData *title = getAndRemoveFromList(titleQueue, index);
-    if(title == NULL)
+    lockQueue();
+    TitleData *title = getContent(titleQueue, index);
+    if(title == NULL || title == activeTitle)
+    {
+        unlockQueue();
         return false;
+    }
 
-    if(title->rambuf != NULL)
-        freeRamBuf(title->rambuf);
-    else
-        MEMFreeToDefaultHeap(title->tmd);
+    removeFromList(titleQueue, title);
+    unlockQueue();
 
-    MEMFreeToDefaultHeap(title);
+    freeTitle(title);
     return true;
 }
 
@@ -207,11 +403,35 @@ LIST *getTitleQueue()
 bool isQueued(const char *name)
 {
     TitleData *title;
+    bool ret = false;
+    lockQueue();
     forEachListEntry(titleQueue, title)
     {
         if(strcmp(name, title->folderName) == 0)
-            return true;
+        {
+            ret = true;
+            break;
+        }
     }
+    unlockQueue();
 
-    return false;
+    return ret;
+}
+
+bool isEntryQueued(const TitleEntry *entry)
+{
+    TitleData *title;
+    bool ret = false;
+    lockQueue();
+    forEachListEntry(titleQueue, title)
+    {
+        if(title->entry == entry)
+        {
+            ret = true;
+            break;
+        }
+    }
+    unlockQueue();
+
+    return ret;
 }

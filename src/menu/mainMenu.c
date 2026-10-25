@@ -26,13 +26,16 @@
 #include <installer.h>
 #include <localisation.h>
 #include <menu/config.h>
+#include <menu/engineFrames.h>
 #include <menu/installer.h>
 #include <menu/insttitlebrowser.h>
 #include <menu/logs.h>
 #include <menu/main.h>
 #include <menu/missingcontent.h>
+#include <menu/queue.h>
 #include <menu/titlebrowser.h>
 #include <menu/utils.h>
+#include <queue.h>
 #include <renderer.h>
 #include <state.h>
 #include <ticket.h>
@@ -44,6 +47,8 @@
 #pragma GCC diagnostic pop
 
 static int cursorPos = 11;
+// Whether the last frame showed the line of the download manager.
+static bool showedQueue = false;
 
 static void renderMainMenuFrame()
 {
@@ -66,6 +71,7 @@ static void renderMainMenuFrame()
     textToFrame(line++, 4, localise("Find missing content"));
     textToFrame(line++, 4, localise("Options"));
     textToFrame(line++, 4, localise("Logs"));
+    textToFrame(line++, 4, localise("Download manager"));
 
     textToFrame(7, MAX_CHARS - 27, localise("Developers:"));
     textToFrame(8, MAX_CHARS - 26, "• DaThinkingChair");
@@ -82,12 +88,26 @@ static void renderMainMenuFrame()
     textToFrame(19, MAX_CHARS - 26, "• LuckyDingo");
     textToFrame(20, MAX_CHARS - 26, "• Vague Rant");
 
+    showedQueue = queueRunning();
+    if(showedQueue)
+    {
+        char toFrame[512];
+        getEngineSummary(toFrame, sizeof(toFrame));
+        textToFrameColoredCut(MAX_LINES - 3, 4, toFrame, SCREEN_COLOR_YELLOW, (SCREEN_WIDTH - (FONT_SIZE << 1)) - (getSpaceWidth() * 4));
+    }
+
     lineToFrame(MAX_LINES - 2, SCREEN_COLOR_WHITE);
     textToFrame(MAX_LINES - 1, ALIGNED_CENTER, localise("Press " BUTTON_HOME " or " BUTTON_B " to exit"));
 }
 
 static void updateMainMenu()
 {
+    // The line of the download manager follows the run once a second and
+    // goes away with it.
+    bool running = queueRunning();
+    if(running != showedQueue || (running && uiFrameCount() % FRAMERATE == 0))
+        uiInvalidate();
+
     if(vpad.trigger & VPAD_BUTTON_B)
     {
         if(showExitOverlay(true))
@@ -121,17 +141,20 @@ static void updateMainMenu()
             case 17:
                 logsMenu();
                 break;
+            case 18:
+                downloadManagerMenu();
+                break;
         }
     }
     else if(vpad.trigger & VPAD_BUTTON_DOWN)
     {
-        if(++cursorPos == 18)
+        if(++cursorPos == 19)
             cursorPos = 11;
     }
     else if(vpad.trigger & VPAD_BUTTON_UP)
     {
         if(--cursorPos == 10)
-            cursorPos = 17;
+            cursorPos = 18;
     }
 }
 

@@ -56,6 +56,14 @@ extern "C"
      * header only: uiWaitWhile for blocking work (with an optional frame
      * callback implemented on the UI side), uiShowOverlay/uiHideOverlay for
      * breadcrumbs and uiPostError for errors raised on other threads.
+     *
+     * The engine may also run on the queue thread of the download manager
+     * (see queue.h), which must not draw. There the pumps and waits below
+     * only sleep for a frame, uiPump hands the frame it would have drawn
+     * to the progress screen instead (see engineFrames.h), breadcrumbs
+     * become the status line of that screen and uiModal runs the dialog
+     * on the main thread through uiCallOnMain. The engine code itself
+     * stays the same on both threads.
      */
 
     typedef struct UIScreen
@@ -154,6 +162,15 @@ extern "C"
     // then waits has to present here instead of only sleeping. Returns at once,
     // so the wait it sits in stays a wait and not a stall.
     void uiPresentFrame();
+
+    // Runs fn(arg) on the thread of the UI loop and returns its result.
+    // The main thread calls it directly. Any other thread hands the call
+    // over and sleeps until a frame of the loop ran it in uiDrainEvents,
+    // where it may open a dialog of its own. A call the loop has not taken
+    // yet is withdrawn with 0 once the caller has to stop (see AppRunning):
+    // nobody is left to answer it on the way out.
+    typedef int (*UiMainCall)(void *arg);
+    int uiCallOnMain(UiMainCall fn, void *arg);
 
     // Thread-safe and one slot deep: hands the text over to the thread
     // running uiRun(), which shows the dialog in one of its next frames.

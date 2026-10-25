@@ -206,5 +206,18 @@
     "unknown": "unknown",
     "Yes": "Yes",
     "No": "No",
-    "File": "File"
+    "File": "File",
+
+    "\uE002 to download in the background": "\uE002 to download in the background",
+    "\uE045 to show the progress": "\uE045 to show the progress",
+    "\uE045 to add to the download manager": "\uE045 to add to the download manager",
+    "Download manager": "Download manager",
+    "Wait for the download manager to finish first.": "Wait for the download manager to finish first.",
+    "The queue is empty": "The queue is empty",
+    "\uE002 to cancel the downloads": "\uE002 to cancel the downloads",
+
+    "\uE002 to use the Wii U Download Management": "\uE002 to use the Wii U Download Management",
+    "Added to the Wii U Download Management!": "Added to the Wii U Download Management!",
+    "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?",
+    "The Wii U Download Management refused the title.": "The Wii U Download Management refused the title."
 }

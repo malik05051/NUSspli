@@ -310,6 +310,11 @@ static const UIScreen itbConfirmScreen = {
 
 static void updateITBMenu()
 {
+    // Leaving the app would end the download manager, an uninstall must
+    // not run next to its install.
+    if(vpad.trigger & (VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS) && downloadManagerBusy())
+        return;
+
     if(vpad.trigger & VPAD_BUTTON_PLUS)
     {
         launchTitle(ititleEntries + itbCursor + itbPos);

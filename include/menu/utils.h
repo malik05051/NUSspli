@@ -46,12 +46,17 @@ extern "C"
         FINISHING_OPERATION_INSTALL,
         FINISHING_OPERATION_DEINSTALL,
         FINISHING_OPERATION_DOWNLOAD,
-        FINISHING_OPERATION_QUEUE
+        FINISHING_OPERATION_QUEUE,
+        FINISHING_OPERATION_SYSTEM_DOWNLOAD
     } FINISHING_OPERATION;
 
     void addToScreenLog(const char *str, ...);
     void clearScreenLog();
     void writeScreenLog(int line);
+    // Keeps that many lines at the bottom of the screen free of the log, for
+    // a screen that draws a footer below a frame with the log in it. 0 gives
+    // the whole screen back.
+    void reserveScreenLogLines(int lines);
     void drawErrorFrame(const char *text, ErrorOptions option);
     void drawErrorFrameContent(const char *text, ErrorOptions option);
     ErrorOptions showErrorDialog(const char *text, ErrorOptions option);
@@ -68,6 +73,10 @@ extern "C"
     bool showExitOverlay(bool really);
     // True while a yes/no question of the shared dialog is on screen.
     bool dialogOpen();
+    // For what must not run next to the download manager (an install or
+    // uninstall of its own): true, with a dialog saying so, while the queue
+    // runs in the background.
+    bool downloadManagerBusy();
 
 #ifdef __cplusplus
 }

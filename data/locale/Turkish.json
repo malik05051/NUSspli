@@ -201,5 +201,18 @@
     "unknown": "bilinmeyen",
     "Yes": "Evet",
     "No": "Hayır",
-    "File": "Dosya"
+    "File": "Dosya",
+
+    "\uE002 to download in the background": "Arka planda indirmek için \uE002 tuşuna bas",
+    "\uE045 to show the progress": "İlerlemeyi göstermek için \uE045 tuşuna bas",
+    "\uE045 to add to the download manager": "İndirme yöneticisine eklemek için \uE045 tuşuna bas",
+    "Download manager": "İndirme yöneticisi",
+    "Wait for the download manager to finish first.": "Önce indirme yöneticisinin bitmesini bekle.",
+    "The queue is empty": "Kuyruk boş",
+    "\uE002 to cancel the downloads": "İndirmeleri iptal etmek için \uE002 tuşuna bas",
+
+    "\uE002 to use the Wii U Download Management": "Wii U İndirme Yönetimi'ni kullanmak için \uE002 tuşuna bas",
+    "Added to the Wii U Download Management!": "Wii U İndirme Yönetimi'ne eklendi!",
+    "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "Konsolda bu başlık için bir bilet yok,\nbu yüzden Wii U İndirme Yönetimi muhtemelen onu yükleyemeyecek.\n\nYine de eklensin mi?",
+    "The Wii U Download Management refused the title.": "Wii U İndirme Yönetimi başlığı reddetti."
 }
