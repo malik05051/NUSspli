@@ -147,8 +147,6 @@ static void renderPDMenu()
     arrowToFrame(cursorPos, 0);
 
     strcpy(toFrame, localise(BUTTON_MINUS " to add to the queue"));
-    strcat(toFrame, " || ");
-    strcat(toFrame, localise(BUTTON_X " to use the Wii U Download Management"));
     if(pdInstalled)
     {
         strcat(toFrame, " || ");
@@ -159,6 +157,10 @@ static void renderPDMenu()
     strcpy(toFrame, localise("Press " BUTTON_B " to return"));
     strcat(toFrame, " || ");
     strcat(toFrame, localise(queueRunning() ? BUTTON_PLUS " to add to the download manager" : BUTTON_PLUS " to start"));
+    // Here and not behind the queue hint: that line is the long one, and
+    // translated it ran off both edges of the screen.
+    strcat(toFrame, " || ");
+    strcat(toFrame, localise(BUTTON_X " Download Management"));
     textToFrame(--line, ALIGNED_CENTER, toFrame);
 
     lineToFrame(--line, SCREEN_COLOR_WHITE);
@@ -543,6 +545,22 @@ static int pdAskAnswer(void *ovl)
 static void pdSystemDownload()
 {
     char txt[1024];
+
+    // The call into the system is not documented and took a console down
+    // in the first test, so it runs only on a clear yes.
+    snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+        localise("Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?"),
+        localise("Yes"), localise("No"));
+    int warn = pdAskAnswer(uiShowOverlay(txt));
+    if(warn < 0)
+    {
+        pdFinish(0);
+        return;
+    }
+
+    if(warn == 0)
+        return;
+
     if(!isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid))
     {
         snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",

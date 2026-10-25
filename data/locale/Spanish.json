@@ -217,8 +217,9 @@
     "The queue is empty": "La cola está vacía",
     "\uE002 to cancel the downloads": "\uE002 para cancelar las descargas",
 
-    "\uE002 to use the Wii U Download Management": "\uE002 para usar la gestión de descargas de Wii U",
+    "\uE002 Download Management": "\uE002 Gestión de descargas",
     "Added to the Wii U Download Management!": "¡Añadido a la gestión de descargas de Wii U!",
     "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "No hay ningún ticket de este título en la consola,\nasí que la gestión de descargas de Wii U probablemente no podrá instalarlo.\n\n¿Añadirlo de todos modos?",
-    "The Wii U Download Management refused the title.": "La gestión de descargas de Wii U ha rechazado el título."
+    "The Wii U Download Management refused the title.": "La gestión de descargas de Wii U ha rechazado el título.",
+    "Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?": "Experimental: pasar un título a la gestión de descargas de Wii U\npuede bloquear la consola.\n\n¿Continuar?"
 }
