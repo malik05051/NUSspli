@@ -30,6 +30,7 @@
 #include <downloader.h>
 #include <filesystem.h>
 #include <input.h>
+#include <menu/engineFrames.h>
 #include <menu/predownload.h>
 #include <menu/utils.h>
 #include <nim.h>
@@ -558,6 +559,21 @@ static bool pdNimStep(char *txt, size_t size, const char *step, const char *call
     return (showErrorDialog(txt, A_CONTINUE | B_RETURN) & A_CONTINUE) != 0;
 }
 
+// The calls into the system block for a while (the registration took
+// seconds in the tests), so a frame says so before every one of them.
+static void pdNimWait(const char *call)
+{
+    showStatusFrame(call, localise("Please wait..."), false, -1);
+}
+
+// A button pressed during the wait must not answer the next dialog: a
+// press is reported once, so reading it here takes it away from that
+// dialog, which closes on any button.
+static void pdNimWaitDone()
+{
+    readInput();
+}
+
 static void pdSystemDownload()
 {
     char txt[1024];
@@ -595,9 +611,12 @@ static void pdSystemDownload()
 
     // One stop in front of every call: the console crashed in the first
     // tests and the last screen before a crash names the call that did it.
-    if(!pdNimStep(txt, sizeof(txt), "1/2", "nn::nim::Initialize()", NULL))
+    // An update without its ticket needs one more call to fetch it first.
+    const bool fetchTicket = isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid);
+    if(!pdNimStep(txt, sizeof(txt), fetchTicket ? "1/3" : "1/2", "nn::nim::Initialize()", NULL))
         return;
 
+    pdNimWait("nn::nim::Initialize()");
     NNResult res = nimInitialize();
     if(NNResult_IsFailure(res))
     {
@@ -608,15 +627,37 @@ static void pdSystemDownload()
 
     // Step 2 is filled in by NUSspli itself, the system call the eShop uses
     // for it crashed the console (see nimMakeConfig): no stop needed.
+    if(fetchTicket)
+    {
+        if(!pdNimStep(txt, sizeof(txt), "2/3", "nn::nim::DownloadPatchTitleTicket()", NULL))
+        {
+            nimFinalize();
+            return;
+        }
+
+        pdNimWait("nn::nim::DownloadPatchTitleTicket()");
+        res = nimDownloadPatchTicket(pdTmd->tid);
+        if(NNResult_IsFailure(res))
+        {
+            int32_t code = nimErrorCode(res);
+            nimFinalize();
+            pdNimWaitDone();
+            snprintf(txt, sizeof(txt), "%s\n\nnn::nim::DownloadPatchTitleTicket(): %#010x (%d)", localise("The Wii U Download Management refused the title."), (unsigned int)res.value, (int)code);
+            showErrorFrame(txt);
+            return;
+        }
+    }
+
     NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
     nimMakeConfig(&config, pdTmd->tid);
 
-    if(!pdNimStep(txt, sizeof(txt), "2/2", "nn::nim::RegisterTitlePackageTask()", &config))
+    if(!pdNimStep(txt, sizeof(txt), fetchTicket ? "3/3" : "2/2", "nn::nim::RegisterTitlePackageTask()", &config))
     {
         nimFinalize();
         return;
     }
 
+    pdNimWait("nn::nim::RegisterTitlePackageTask()");
     res = nimRegister(&config, pdTmd->tid);
 
     // A usage error says one of the arguments is malformed. Cemu reads the
@@ -645,6 +686,7 @@ static void pdSystemDownload()
         int32_t code = nimErrorCode(res);
         int32_t code2 = retried ? nimErrorCode(second) : 0;
         nimFinalize();
+        pdNimWaitDone();
 
         MCPTitleListType installed __attribute__((__aligned__(0x40)));
         bool isInstalled = MCP_GetTitleInfo(mcpHandle, pdTmd->tid, &installed) == 0;
@@ -676,6 +718,7 @@ static void pdSystemDownload()
     }
 
     nimFinalize();
+    pdNimWaitDone();
 
     addToScreenLog("\"%s\" added to the Wii U Download Management", pdEntry->name);
     showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD);
