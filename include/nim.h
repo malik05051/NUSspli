@@ -83,6 +83,9 @@ extern "C"
     // what nimInitialize() opened.
     NNResult nimInitialize();
     void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid);
+    // Fetches the ticket of an update from the servers of Nintendo, which
+    // the registration of an update without one needs.
+    NNResult nimDownloadPatchTicket(uint64_t tid);
     // The system picks the contents of the title itself.
     NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid);
 

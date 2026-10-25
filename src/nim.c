@@ -40,6 +40,7 @@ extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *con
 // which is how Cemu receives it, and the object holds two words there.
 extern void NIMResultErrorConstruct(void *resultError, const NNResult *result, int32_t unknown) __asm__("Construct__Q3_2nn3nim11ResultErrorFQ2_2nn6Resulti");
 extern int32_t NIMResultErrorGetErrorCode(const void *resultError) __asm__("GetErrorCode__Q3_2nn3nim11ResultErrorCFv");
+extern NNResult NIMDownloadPatchTitleTicket(uint64_t titleId) __asm__("DownloadPatchTitleTicket__Q2_2nn3nimFUL");
 extern NNResult NIMIsECommerceInfrastructureStandbyMode(bool *standby) __asm__("IsECommerceInfrastructureStandbyMode__Q2_2nn3nimFPb");
 extern NNResult NIMGetECommerceInfrastructureCountry(void *country) __asm__("GetECommerceInfrastructureCountry__Q2_2nn3nimFPQ3_2nn3nim7Country");
 
@@ -92,6 +93,18 @@ NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid)
     debugPrintf("NIM: RegisterTitlePackageTask(%016llX, no contents)", tid);
     NNResult res = NIMRegisterTitlePackageTask(config, NULL, 0);
     debugPrintf("NIM: RegisterTitlePackageTask() returned %#010x", res.value);
+    return res;
+}
+
+// An update without its ticket on the console was refused as a status error
+// (0xA051DD80, 105-0955) while the same update with its ticket got past that
+// check, so the ticket comes first: this is the call that fetches the ticket
+// of an update from the servers of Nintendo.
+NNResult nimDownloadPatchTicket(uint64_t tid)
+{
+    debugPrintf("NIM: DownloadPatchTitleTicket(%016llX)", tid);
+    NNResult res = NIMDownloadPatchTitleTicket(tid);
+    debugPrintf("NIM: DownloadPatchTitleTicket() returned %#010x", res.value);
     return res;
 }
 
