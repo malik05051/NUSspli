@@ -51,7 +51,9 @@ extern "C"
      *
      * The handoff crashed the console in the first tests, so it is split
      * into its calls: the caller shows every step before it runs it, and
-     * the last screen before a crash names the call that caused it.
+     * the last screen before a crash names the call that caused it. The
+     * config is filled in by NUSspli, the system call the eShop uses for
+     * it crashed the console (see nimMakeConfig() in nim.c).
      */
 
     // nn::nim::TitlePackageTaskConfig, as Cemu fills it for the eShop.
