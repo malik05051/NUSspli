@@ -64,7 +64,11 @@ extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *con
 
 int32_t registerSystemDownload(const TMD *tmd)
 {
+    // One line in front of every call: the first test crashed the console,
+    // and the last line that reaches the UDP log names the call that did it.
+    debugPrintf("NIM: Initialize()");
     NNResult res = NIMInitialize();
+    debugPrintf("NIM: Initialize() returned %#010x", res.value);
     if(NNResult_IsFailure(res))
     {
         debugPrintf("nn::nim::Initialize() failed: %#010x", res.value);
@@ -83,13 +87,16 @@ int32_t registerSystemDownload(const TMD *tmd)
     for(uint16_t i = 0; i < tmd->num_contents; ++i)
         contents[i] = tmd->contents[i].index;
 
+    debugPrintf("NIM: MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy(%016llX)", tmd->tid);
     NimTitlePackageTaskConfig config = NIMMakeTitlePackageTaskConfig(tmd->tid, 0, NIM_TITLE_TYPE);
     debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tmd->tid, config.titleType, config.applicationBoxDevice1, config.applicationBoxDevice2, config.postDownloadAction);
 
+    debugPrintf("NIM: RegisterTitlePackageTask()");
     res = NIMRegisterTitlePackageTask(&config, contents, tmd->num_contents);
     debugPrintf("nn::nim::RegisterTitlePackageTask(%016llX, %u contents): %#010x", tmd->tid, tmd->num_contents, res.value);
 
     MEMFreeToDefaultHeap(contents);
+    debugPrintf("NIM: Finalize()");
     NIMFinalize();
     return NNResult_IsFailure(res) ? res.value : 0;
 }

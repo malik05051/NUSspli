@@ -216,8 +216,9 @@
     "The queue is empty": "The queue is empty",
     "\uE002 to cancel the downloads": "\uE002 to cancel the downloads",
 
-    "\uE002 to use the Wii U Download Management": "\uE002 to use the Wii U Download Management",
+    "\uE002 Download Management": "\uE002 Download Management",
     "Added to the Wii U Download Management!": "Added to the Wii U Download Management!",
     "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?",
-    "The Wii U Download Management refused the title.": "The Wii U Download Management refused the title."
+    "The Wii U Download Management refused the title.": "The Wii U Download Management refused the title.",
+    "Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?": "Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?"
 }
