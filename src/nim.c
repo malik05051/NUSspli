@@ -26,29 +26,7 @@
 
 #pragma GCC diagnostic ignored "-Wundef"
 #include <coreinit/memdefaultheap.h>
-#include <nn/result.h>
 #pragma GCC diagnostic pop
-
-// nn::nim::TitlePackageTaskConfig, as Cemu fills it for the eShop.
-typedef struct WUT_PACKED
-{
-    uint32_t titleIdHigh;
-    uint32_t titleIdLow;
-    uint32_t regionOrLanguage;
-    uint8_t titleType;
-    uint8_t applicationBoxDevice1;
-    WUT_UNKNOWN_BYTES(1);
-    uint8_t applicationBoxDevice2;
-    WUT_UNKNOWN_BYTES(6);
-    uint8_t postDownloadAction;
-    WUT_UNKNOWN_BYTES(1);
-} NimTitlePackageTaskConfig;
-WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x00, titleIdHigh);
-WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x08, regionOrLanguage);
-WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x0C, titleType);
-WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x0F, applicationBoxDevice2);
-WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x16, postDownloadAction);
-WUT_CHECK_SIZE(NimTitlePackageTaskConfig, 0x18);
 
 // The C++ exports of nn_nim.rpl. WUT links them, but ships no header: the
 // names carry the mangling, and a config returned by value travels through
@@ -62,41 +40,45 @@ extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *con
 // an ordinary title. The region is ignored by Cemu and left at 0 as well.
 #define NIM_TITLE_TYPE 0
 
-int32_t registerSystemDownload(const TMD *tmd)
+// Every line goes out in front of its call as well: the last one that
+// reaches the UDP log names the call that crashed.
+NNResult nimInitialize()
 {
-    // One line in front of every call: the first test crashed the console,
-    // and the last line that reaches the UDP log names the call that did it.
     debugPrintf("NIM: Initialize()");
     NNResult res = NIMInitialize();
     debugPrintf("NIM: Initialize() returned %#010x", res.value);
-    if(NNResult_IsFailure(res))
-    {
-        debugPrintf("nn::nim::Initialize() failed: %#010x", res.value);
-        return res.value;
-    }
+    return res;
+}
 
+void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
+{
+    debugPrintf("NIM: MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy(%016llX)", tid);
+    *config = NIMMakeTitlePackageTaskConfig(tid, 0, NIM_TITLE_TYPE);
+    debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tid, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
+}
+
+NNResult nimRegister(const NimTitlePackageTaskConfig *config, const TMD *tmd)
+{
     // The task downloads exactly the contents it is handed, so it gets all
-    // of them, the way a fresh install needs them.
-    uint16_t *contents = MEMAllocFromDefaultHeap(sizeof(uint16_t) * (tmd->num_contents == 0 ? 1 : tmd->num_contents));
+    // of them, the way a fresh install needs them. Aligned like every buffer
+    // that may travel to the IOSU, in case the library hands it on as it is.
+    uint16_t *contents = MEMAllocFromDefaultHeapEx(sizeof(uint16_t) * (tmd->num_contents == 0 ? 1 : tmd->num_contents), 0x40);
     if(contents == NULL)
-    {
-        NIMFinalize();
-        return -1;
-    }
+        return (NNResult) { .value = -1 };
 
     for(uint16_t i = 0; i < tmd->num_contents; ++i)
         contents[i] = tmd->contents[i].index;
 
-    debugPrintf("NIM: MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy(%016llX)", tmd->tid);
-    NimTitlePackageTaskConfig config = NIMMakeTitlePackageTaskConfig(tmd->tid, 0, NIM_TITLE_TYPE);
-    debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tmd->tid, config.titleType, config.applicationBoxDevice1, config.applicationBoxDevice2, config.postDownloadAction);
-
-    debugPrintf("NIM: RegisterTitlePackageTask()");
-    res = NIMRegisterTitlePackageTask(&config, contents, tmd->num_contents);
-    debugPrintf("nn::nim::RegisterTitlePackageTask(%016llX, %u contents): %#010x", tmd->tid, tmd->num_contents, res.value);
+    debugPrintf("NIM: RegisterTitlePackageTask(%016llX, %u contents)", tmd->tid, tmd->num_contents);
+    NNResult res = NIMRegisterTitlePackageTask(config, contents, tmd->num_contents);
+    debugPrintf("NIM: RegisterTitlePackageTask() returned %#010x", res.value);
 
     MEMFreeToDefaultHeap(contents);
+    return res;
+}
+
+void nimFinalize()
+{
     debugPrintf("NIM: Finalize()");
     NIMFinalize();
-    return NNResult_IsFailure(res) ? res.value : 0;
 }
