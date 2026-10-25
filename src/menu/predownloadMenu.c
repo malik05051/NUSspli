@@ -617,11 +617,23 @@ static void pdSystemDownload()
         return;
     }
 
-    res = nimRegister(&config, pdTmd);
+    // Which arguments the system wants is not known, but a refusal comes
+    // back as a result instead of a crash. A usage error with the content
+    // list gets one more try without it, the system may want to pick the
+    // contents itself. Both results end up on the screen.
+    res = nimRegister(&config, pdTmd, true);
+    NNResult second = { .value = 0 };
+    bool retried = NNResult_IsFailure(res) && ((uint32_t)res.value >> 29) == 6; // LEVEL_USAGE
+    if(retried)
+        second = nimRegister(&config, pdTmd, false);
+
     nimFinalize();
-    if(NNResult_IsFailure(res))
+    if(NNResult_IsFailure(res) && (!retried || NNResult_IsFailure(second)))
     {
-        snprintf(txt, sizeof(txt), "%s\n\nnn::nim::RegisterTitlePackageTask(): %#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        int len = snprintf(txt, sizeof(txt), "%s\n\nnn::nim::RegisterTitlePackageTask(): %#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        if(retried && len > 0 && (size_t)len < sizeof(txt))
+            snprintf(txt + len, sizeof(txt) - len, "\nnn::nim::RegisterTitlePackageTask(NULL, 0): %#010x", (unsigned int)second.value);
+
         showErrorFrame(txt);
         return;
     }

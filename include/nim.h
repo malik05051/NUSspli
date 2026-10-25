@@ -20,6 +20,7 @@
 
 #include <wut-fixups.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <tmd.h>
@@ -82,7 +83,9 @@ extern "C"
     // what nimInitialize() opened.
     NNResult nimInitialize();
     void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid);
-    NNResult nimRegister(const NimTitlePackageTaskConfig *config, const TMD *tmd);
+    // withContents hands every content of the TMD over, without it the
+    // system is left to pick the contents itself.
+    NNResult nimRegister(const NimTitlePackageTaskConfig *config, const TMD *tmd, bool withContents);
     void nimFinalize();
 
 #ifdef __cplusplus
