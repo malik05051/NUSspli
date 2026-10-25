@@ -36,10 +36,6 @@ extern NNResult NIMInitialize(void) __asm__("Initialize__Q2_2nn3nimFv");
 extern NNResult NIMFinalize(void) __asm__("Finalize__Q2_2nn3nimFv");
 extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *config, const uint16_t *contents, uint32_t numContents) __asm__("RegisterTitlePackageTask__Q2_2nn3nimFRCQ3_2nn3nim22TitlePackageTaskConfigPCUsUi");
 
-// The values of nn::Cafe::TitleType are not documented, 0 is the guess for
-// an ordinary title.
-#define NIM_TITLE_TYPE 0
-
 // Every line goes out in front of its call as well: the last one that
 // reaches the UDP log names the call that crashed.
 NNResult nimInitialize()
@@ -52,8 +48,8 @@ NNResult nimInitialize()
 
 // The eShop fills the config with
 // nn::nim::util::MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy(), but
-// that call took a 5.5.5E console down in the step by step test, with the
-// title type above and a region of 0. Cemu only stubs it, so whatever it
+// that call took a 5.5.5E console down in the step by step test, with a
+// title type of 0 and a region of 0. Cemu only stubs it, so whatever it
 // checks or reads on a console is unknown: the config is filled here the
 // way Cemu fills it instead, which is what the eShop runs with in Cemu.
 void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
@@ -62,7 +58,11 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
     config->titleIdHigh = (uint32_t)(tid >> 32);
     config->titleIdLow = (uint32_t)tid;
     config->regionOrLanguage = 0;
-    config->titleType = NIM_TITLE_TYPE;
+    // The values of nn::Cafe::TitleType are not documented. A type of 0 for
+    // an update was refused as a usage error (0xC0512E80), so the type is
+    // taken from the title ID now: its category, 0x00 for a game, 0x02 for a
+    // demo, 0x0C for DLC and 0x0E for an update.
+    config->titleType = (uint8_t)(tid >> 32);
     // 1 is the internal memory in Cemu, the eShop reads these two to find
     // the device of the title.
     config->applicationBoxDevice1 = 1;
@@ -76,8 +76,16 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
     debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tid, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
 }
 
-NNResult nimRegister(const NimTitlePackageTaskConfig *config, const TMD *tmd)
+NNResult nimRegister(const NimTitlePackageTaskConfig *config, const TMD *tmd, bool withContents)
 {
+    if(!withContents)
+    {
+        debugPrintf("NIM: RegisterTitlePackageTask(%016llX, no contents)", tmd->tid);
+        NNResult res = NIMRegisterTitlePackageTask(config, NULL, 0);
+        debugPrintf("NIM: RegisterTitlePackageTask() returned %#010x", res.value);
+        return res;
+    }
+
     // The task downloads exactly the contents it is handed, so it gets all
     // of them, the way a fresh install needs them. Aligned like every buffer
     // that may travel to the IOSU, in case the library hands it on as it is.
