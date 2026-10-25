@@ -62,6 +62,21 @@ static volatile FSError fwriteErrno = FS_ERROR_OK;
 static bool queueStalled = false;
 #endif
 
+// The queue has more than one producer: the queue thread of the download
+// manager streams content files while the menus keep writing (the config,
+// a fake ticket). Each call goes in as a whole under this lock.
+static spinlock producerLock = SPINLOCK_FREE;
+// The file the bytes waiting in the open slot belong to. With one producer
+// that was always the file of the next call, with two the next call may
+// write another file and must not append to bytes that are not its own.
+static FSAFileHandle pendingFile = 0;
+// Slots handed to the I/O thread and slots it is done with, counted from the
+// start. flushIOQueue() waits for the slots handed over before it was called
+// instead of an empty ring: with the queue thread of the download manager
+// streaming, the ring may not run empty for minutes.
+static volatile uint32_t committedEntries = 0;
+static volatile uint32_t writtenEntries = 0;
+
 static int ioThreadMain(int argc, const char **argv)
 {
     (void)argc;
@@ -103,6 +118,7 @@ static int ioThreadMain(int argc, const char **argv)
             asl = 0;
 
         entry->file = 0;
+        ++writtenEntries;
         activeWriteBuffer = asl;
         entry = queueEntries + asl;
     }
@@ -189,11 +205,12 @@ void shutdownIOThread()
 static inline void commitIOEntry(WriteQueueEntry *entry, FSAFileHandle file)
 {
     entry->file = file;
+    ++committedEntries;
     if(++activeReadBuffer == MAX_IO_QUEUE_ENTRIES)
         activeReadBuffer = 0;
 }
 
-size_t addToIOQueue(const void *buf, size_t size, size_t n, FSAFileHandle file)
+static size_t queueWrite(const void *buf, size_t size, size_t n, FSAFileHandle file)
 {
     if(checkForQueueErrors())
         return 0;
@@ -202,6 +219,13 @@ size_t addToIOQueue(const void *buf, size_t size, size_t n, FSAFileHandle file)
 
 retryAddingToQueue:
     entry = queueEntries + activeReadBuffer;
+    if(entry->file == 0 && entry->size != 0 && pendingFile != file)
+    {
+        // Bytes of another file wait in the slot: hand them over first.
+        commitIOEntry(entry, pendingFile);
+        goto retryAddingToQueue;
+    }
+
     if(entry->file != 0)
     {
 #ifdef NUSSPLI_DEBUG
@@ -243,14 +267,17 @@ retryAddingToQueue:
             size -= ns;
             const uint8_t *newPtr = buf;
             newPtr += ns;
-            addToIOQueue((const void *)newPtr, 1, size, file);
+            queueWrite((const void *)newPtr, 1, size, file);
             return n;
         }
 
         OSBlockMove((void *)(entry->buf + entry->size), buf, size, false);
         entry->size = ns;
         if(ns != IO_MAX_FILE_BUFFER) // ns < IO_MAX_FILE_BUFFER
+        {
+            pendingFile = file;
             return n;
+        }
     }
     else if(entry->size != 0)
     {
@@ -269,26 +296,36 @@ retryAddingToQueue:
     return n;
 }
 
+size_t addToIOQueue(const void *buf, size_t size, size_t n, FSAFileHandle file)
+{
+    spinLockAsMutex(producerLock);
+    size_t ret = queueWrite(buf, size, n, file);
+    spinReleaseLock(producerLock);
+    return ret;
+}
+
 void flushIOQueue()
 {
     OSMemoryBarrier();
-    if(queueEntries[activeWriteBuffer].file != 0)
+    const uint32_t target = committedEntries;
+    if((int32_t)(writtenEntries - target) < 0)
     {
         void *ovl = uiShowOverlay("Flushing queue, please wait...");
         debugPrintf("Flushing...");
 
-        while(queueEntries[activeWriteBuffer].file != 0)
+        while((int32_t)(writtenEntries - target) < 0)
         {
             if(checkForQueueErrors())
                 break;
 
-            // The I/O thread has to empty the ring to get here. Present a
-            // frame rather than sleeping one: a breadcrumb only exists in a
-            // presented frame, so the wait below is what carries the message
-            // onto the screen, and its fade runs on its own from there. The
-            // present is VSync paced, so the loop paces itself and no busy
-            // wait is needed. Up to MAX_IO_QUEUE_ENTRIES megabytes can be
-            // pending, which is why the wait is worth watching.
+            // The I/O thread has to write out the slots handed over before
+            // the call to get here. Present a frame rather than sleeping one:
+            // a breadcrumb only exists in a presented frame, so the wait
+            // below is what carries the message onto the screen, and its fade
+            // runs on its own from there. The present is VSync paced, so the
+            // loop paces itself and no busy wait is needed. Up to
+            // MAX_IO_QUEUE_ENTRIES megabytes can be pending, which is why the
+            // wait is worth watching.
             //
             // Not uiPump(): that would drain posted errors and show a dialog
             // in the middle of the flush, and the detection above is what is
