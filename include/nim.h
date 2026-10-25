@@ -83,9 +83,15 @@ extern "C"
     // what nimInitialize() opened.
     NNResult nimInitialize();
     void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid);
-    // withContents hands every content of the TMD over, without it the
-    // system is left to pick the contents itself.
-    NNResult nimRegister(const NimTitlePackageTaskConfig *config, const TMD *tmd, bool withContents);
+    // The system picks the contents of the title itself.
+    NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid);
+
+    // Diagnosis of a refusal, between nimInitialize() and nimFinalize():
+    // the error code the system would show for a result, whether the
+    // eShop infrastructure is in standby and the country it is set to.
+    int32_t nimErrorCode(NNResult res);
+    NNResult nimStandbyMode(bool *standby);
+    NNResult nimCountry(uint8_t country[8]);
     void nimFinalize();
 
 #ifdef __cplusplus
