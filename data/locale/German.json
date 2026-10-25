@@ -205,5 +205,10 @@
     "Download manager": "Download-Manager",
     "Wait for the download manager to finish first.": "Warte, bis der Download-Manager fertig ist.",
     "The queue is empty": "Die Warteschlange ist leer",
-    "\uE002 to cancel the downloads": "\uE002 zum Abbrechen der Downloads"
+    "\uE002 to cancel the downloads": "\uE002 zum Abbrechen der Downloads",
+
+    "\uE002 to use the Wii U Download Management": "\uE002 zum Verwenden der Wii U-Downloadverwaltung",
+    "Added to the Wii U Download Management!": "Zur Wii U-Downloadverwaltung hinzugefügt!",
+    "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "Für diesen Titel ist kein Ticket auf der Konsole,\ndie Wii U-Downloadverwaltung wird ihn vermutlich nicht installieren können.\n\nTrotzdem hinzufügen?",
+    "The Wii U Download Management refused the title.": "Die Wii U-Downloadverwaltung hat den Titel abgelehnt."
 }

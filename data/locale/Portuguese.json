@@ -214,5 +214,10 @@
     "Download manager": "Gestor de transferências",
     "Wait for the download manager to finish first.": "Aguarde até o gestor de transferências terminar.",
     "The queue is empty": "A fila está vazia",
-    "\uE002 to cancel the downloads": "\uE002 para cancelar as transferências"
+    "\uE002 to cancel the downloads": "\uE002 para cancelar as transferências",
+
+    "\uE002 to use the Wii U Download Management": "\uE002 para usar a gestão de transferências da Wii U",
+    "Added to the Wii U Download Management!": "Adicionado à gestão de transferências da Wii U!",
+    "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "Não existe nenhum ticket deste título na consola,\npor isso a gestão de transferências da Wii U provavelmente não o conseguirá instalar.\n\nAdicionar mesmo assim?",
+    "The Wii U Download Management refused the title.": "A gestão de transferências da Wii U recusou o título."
 }

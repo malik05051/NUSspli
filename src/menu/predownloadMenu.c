@@ -32,9 +32,11 @@
 #include <input.h>
 #include <menu/predownload.h>
 #include <menu/utils.h>
+#include <nim.h>
 #include <queue.h>
 #include <renderer.h>
 #include <state.h>
+#include <ticket.h>
 #include <titles.h>
 #include <tmd.h>
 #include <ui.h>
@@ -145,6 +147,8 @@ static void renderPDMenu()
     arrowToFrame(cursorPos, 0);
 
     strcpy(toFrame, localise(BUTTON_MINUS " to add to the queue"));
+    strcat(toFrame, " || ");
+    strcat(toFrame, localise(BUTTON_X " to use the Wii U Download Management"));
     if(pdInstalled)
     {
         strcat(toFrame, " || ");
@@ -532,6 +536,42 @@ static int pdAskAnswer(void *ovl)
     return ret;
 }
 
+// Hands the title to the Wii U Download Management instead of downloading
+// it here: the system downloads and installs it in the background and lists
+// it there, see nim.h. It installs with the ticket the console has, so a
+// title without one gets a warning first - updates bring their own.
+static void pdSystemDownload()
+{
+    char txt[1024];
+    if(!isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid))
+    {
+        snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+            localise("There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?"),
+            localise("Yes"), localise("No"));
+        int ans = pdAskAnswer(uiShowOverlay(txt));
+        if(ans < 0)
+        {
+            pdFinish(0);
+            return;
+        }
+
+        if(ans == 0)
+            return; // back to the settings
+    }
+
+    int32_t res = registerSystemDownload(pdTmd);
+    if(res != 0)
+    {
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res);
+        showErrorFrame(txt);
+        return;
+    }
+
+    addToScreenLog("\"%s\" added to the Wii U Download Management", pdEntry->name);
+    showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD);
+    pdFinish(0);
+}
+
 // The code behind the original settings loop: the pre-selection dialogs,
 // the "preparing" frame and the download/queue itself. The labels keep the
 // original jump structure (runPost, downloadTMD, naNedNa; the old exitPDM
@@ -836,6 +876,12 @@ static void updatePDMenu()
                 cursorPos = PD_LINE_FOLDER_NAME;
         }
 
+        if(vpad.trigger & VPAD_BUTTON_X)
+        {
+            pdSystemDownload();
+            return;
+        }
+
         if(vpad.trigger & VPAD_BUTTON_PLUS)
         {
             // Nothing downloads next to the download manager: the title
@@ -884,7 +930,7 @@ static void updatePDMenu()
 
 static const UIScreen pdScreen = {
     .name = "predownload",
-    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS | VPAD_BUTTON_Y,
+    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS | VPAD_BUTTON_X | VPAD_BUTTON_Y,
     .update = updatePDMenu,
     .render = renderPDMenu,
 };
