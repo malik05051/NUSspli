@@ -618,7 +618,21 @@ static void pdSystemDownload()
     }
 
     res = nimRegister(&config, pdTmd->tid);
-    if(NNResult_IsFailure(res))
+
+    // A usage error says one of the arguments is malformed. Cemu reads the
+    // two device bytes as 1 for the internal memory in its stub but as 0
+    // for it in a comment, so the other reading gets one more try: usage
+    // errors come back without a crash and without a task.
+    NNResult second = { .value = 0 };
+    bool retried = NNResult_IsFailure(res) && ((uint32_t)res.value >> 29) == 6; // LEVEL_USAGE
+    if(retried)
+    {
+        config.applicationBoxDevice1 = 0;
+        config.applicationBoxDevice2 = 0;
+        second = nimRegister(&config, pdTmd->tid);
+    }
+
+    if(NNResult_IsFailure(res) && (!retried || NNResult_IsFailure(second)))
     {
         // Everything that may explain the refusal, read before NIM closes:
         // the error code the system would show for it, the state of the
@@ -629,25 +643,34 @@ static void pdSystemDownload()
         NNResult countryRes = nimCountry(country);
         // Last: its object layout is the least known of the three.
         int32_t code = nimErrorCode(res);
+        int32_t code2 = retried ? nimErrorCode(second) : 0;
         nimFinalize();
 
         MCPTitleListType installed __attribute__((__aligned__(0x40)));
         bool isInstalled = MCP_GetTitleInfo(mcpHandle, pdTmd->tid, &installed) == 0;
+        uint16_t installedVersion = isInstalled ? installed.titleVersion : 0;
+        // An update or DLC needs its game: is that one there?
+        bool baseInstalled = MCP_GetTitleInfo(mcpHandle, TID_TO_BASE(pdTmd->tid), &installed) == 0;
 
-        snprintf(txt, sizeof(txt),
+        int len = snprintf(txt, sizeof(txt),
             "%s\n\n"
-            "nn::nim::RegisterTitlePackageTask(NULL, 0): %#010x\n"
-            "ResultError::GetErrorCode(): %d\n"
-            "IsECommerceInfrastructureStandbyMode(): %#010x, %s\n"
-            "GetECommerceInfrastructureCountry(): %#010x, %02X %02X %02X %02X %02X %02X %02X %02X\n"
-            "Ticket: %s\n"
-            "TMD version: %u, installed: %s%u",
+            "RegisterTitlePackageTask(NULL, 0), devices 1: %#010x (%d)\n",
             localise("The Wii U Download Management refused the title."),
-            (unsigned int)res.value, (int)code,
-            (unsigned int)standbyRes.value, standby ? "true" : "false",
-            (unsigned int)countryRes.value, country[0], country[1], country[2], country[3], country[4], country[5], country[6], country[7],
-            hasTicket(pdTmd->tid) ? "yes" : "no",
-            pdTmd->title_version, isInstalled ? "v" : "no ", isInstalled ? installed.titleVersion : 0);
+            (unsigned int)res.value, (int)code);
+        if(retried && len > 0 && (size_t)len < sizeof(txt))
+            len += snprintf(txt + len, sizeof(txt) - len, "RegisterTitlePackageTask(NULL, 0), devices 0: %#010x (%d)\n", (unsigned int)second.value, (int)code2);
+        if(len > 0 && (size_t)len < sizeof(txt))
+            snprintf(txt + len, sizeof(txt) - len,
+                "IsECommerceInfrastructureStandbyMode(): %#010x, %s\n"
+                "GetECommerceInfrastructureCountry(): %#010x, %02X %02X %02X %02X %02X %02X %02X %02X\n"
+                "Ticket: %s\n"
+                "TMD version: %u, installed: %s%u\n"
+                "Base title installed: %s",
+                (unsigned int)standbyRes.value, standby ? "true" : "false",
+                (unsigned int)countryRes.value, country[0], country[1], country[2], country[3], country[4], country[5], country[6], country[7],
+                hasTicket(pdTmd->tid) ? "yes" : "no",
+                pdTmd->title_version, isInstalled ? "v" : "no ", installedVersion,
+                baseInstalled ? "yes" : "no");
         showErrorFrame(txt);
         return;
     }
