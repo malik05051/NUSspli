@@ -542,6 +542,22 @@ static int pdAskAnswer(void *ovl)
 // it here: the system downloads and installs it in the background and lists
 // it there, see nim.h. It installs with the ticket the console has, so a
 // title without one gets a warning first - updates bring their own.
+// A stop of the handoff: names the call that runs next (and the config the
+// system filled in, once there is one) and runs it on A. B backs out.
+static bool pdNimStep(char *txt, size_t size, const char *step, const char *call, const NimTitlePackageTaskConfig *config)
+{
+    int len = snprintf(txt, size, "nn_nim %s\n\n%s", step, call);
+    if(config != NULL && len > 0 && (size_t)len < size)
+    {
+        len += snprintf(txt + len, size - len, "\n\nTitlePackageTaskConfig:\n");
+        const uint8_t *bytes = (const uint8_t *)config;
+        for(size_t i = 0; i < sizeof(NimTitlePackageTaskConfig) && len > 0 && (size_t)len < size; ++i)
+            len += snprintf(txt + len, size - len, i == 12 ? "\n%02X" : (i == 0 ? "%02X" : " %02X"), bytes[i]);
+    }
+
+    return (showErrorDialog(txt, A_CONTINUE | B_RETURN) & A_CONTINUE) != 0;
+}
+
 static void pdSystemDownload()
 {
     char txt[1024];
@@ -577,10 +593,39 @@ static void pdSystemDownload()
             return; // back to the settings
     }
 
-    int32_t res = registerSystemDownload(pdTmd);
-    if(res != 0)
+    // One stop in front of every call: the console crashed in the first
+    // tests and the last screen before a crash names the call that did it.
+    if(!pdNimStep(txt, sizeof(txt), "1/3", "nn::nim::Initialize()", NULL))
+        return;
+
+    NNResult res = nimInitialize();
+    if(NNResult_IsFailure(res))
     {
-        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res);
+        snprintf(txt, sizeof(txt), "%s\n\nnn::nim::Initialize(): %#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        showErrorFrame(txt);
+        return;
+    }
+
+    if(!pdNimStep(txt, sizeof(txt), "2/3", "nn::nim::util::MakeTitlePackageTaskConfigAutoUsingBgInstallPolicy()", NULL))
+    {
+        nimFinalize();
+        return;
+    }
+
+    NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
+    nimMakeConfig(&config, pdTmd->tid);
+
+    if(!pdNimStep(txt, sizeof(txt), "3/3", "nn::nim::RegisterTitlePackageTask()", &config))
+    {
+        nimFinalize();
+        return;
+    }
+
+    res = nimRegister(&config, pdTmd);
+    nimFinalize();
+    if(NNResult_IsFailure(res))
+    {
+        snprintf(txt, sizeof(txt), "%s\n\nnn::nim::RegisterTitlePackageTask(): %#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
         showErrorFrame(txt);
         return;
     }
