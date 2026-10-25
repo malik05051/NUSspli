@@ -35,6 +35,13 @@
 extern NNResult NIMInitialize(void) __asm__("Initialize__Q2_2nn3nimFv");
 extern NNResult NIMFinalize(void) __asm__("Finalize__Q2_2nn3nimFv");
 extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *config, const uint16_t *contents, uint32_t numContents) __asm__("RegisterTitlePackageTask__Q2_2nn3nimFRCQ3_2nn3nim22TitlePackageTaskConfigPCUsUi");
+// nn::nim::ResultError turns a result into the error code the system shows
+// its users. The compiler of the system passes the nn::Result by pointer,
+// which is how Cemu receives it, and the object holds two words there.
+extern void NIMResultErrorConstruct(void *resultError, const NNResult *result, int32_t unknown) __asm__("Construct__Q3_2nn3nim11ResultErrorFQ2_2nn6Resulti");
+extern int32_t NIMResultErrorGetErrorCode(const void *resultError) __asm__("GetErrorCode__Q3_2nn3nim11ResultErrorCFv");
+extern NNResult NIMIsECommerceInfrastructureStandbyMode(bool *standby) __asm__("IsECommerceInfrastructureStandbyMode__Q2_2nn3nimFPb");
+extern NNResult NIMGetECommerceInfrastructureCountry(void *country) __asm__("GetECommerceInfrastructureCountry__Q2_2nn3nimFPQ3_2nn3nim7Country");
 
 // Every line goes out in front of its call as well: the last one that
 // reaches the UDP log names the call that crashed.
@@ -76,31 +83,50 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
     debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tid, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
 }
 
-NNResult nimRegister(const NimTitlePackageTaskConfig *config, const TMD *tmd, bool withContents)
+// The contents are left to the system: the content list of the TMD was
+// refused as a usage error (0xC0512E80) on a 5.5.5E console, with and
+// without the right title type, while no list got past that check.
+NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid)
 {
-    if(!withContents)
-    {
-        debugPrintf("NIM: RegisterTitlePackageTask(%016llX, no contents)", tmd->tid);
-        NNResult res = NIMRegisterTitlePackageTask(config, NULL, 0);
-        debugPrintf("NIM: RegisterTitlePackageTask() returned %#010x", res.value);
-        return res;
-    }
-
-    // The task downloads exactly the contents it is handed, so it gets all
-    // of them, the way a fresh install needs them. Aligned like every buffer
-    // that may travel to the IOSU, in case the library hands it on as it is.
-    uint16_t *contents = MEMAllocFromDefaultHeapEx(sizeof(uint16_t) * (tmd->num_contents == 0 ? 1 : tmd->num_contents), 0x40);
-    if(contents == NULL)
-        return (NNResult) { .value = -1 };
-
-    for(uint16_t i = 0; i < tmd->num_contents; ++i)
-        contents[i] = tmd->contents[i].index;
-
-    debugPrintf("NIM: RegisterTitlePackageTask(%016llX, %u contents)", tmd->tid, tmd->num_contents);
-    NNResult res = NIMRegisterTitlePackageTask(config, contents, tmd->num_contents);
+    (void)tid; // Only read by the debug log
+    debugPrintf("NIM: RegisterTitlePackageTask(%016llX, no contents)", tid);
+    NNResult res = NIMRegisterTitlePackageTask(config, NULL, 0);
     debugPrintf("NIM: RegisterTitlePackageTask() returned %#010x", res.value);
+    return res;
+}
 
-    MEMFreeToDefaultHeap(contents);
+int32_t nimErrorCode(NNResult res)
+{
+    // Room for more than the two words Cemu knows of, in case the object
+    // of a console is larger.
+    uint32_t resultError[16] __attribute__((__aligned__(0x40)));
+    OSBlockSet(resultError, 0, sizeof(resultError));
+    debugPrintf("NIM: ResultError(%#010x)", res.value);
+    NIMResultErrorConstruct(resultError, &res, 0);
+    int32_t code = NIMResultErrorGetErrorCode(resultError);
+    debugPrintf("NIM: error code %d", code);
+    return code;
+}
+
+NNResult nimStandbyMode(bool *standby)
+{
+    // Room and alignment for a bool the system may write wider.
+    uint8_t buf[0x40] __attribute__((__aligned__(0x40)));
+    OSBlockSet(buf, 0, sizeof(buf));
+    debugPrintf("NIM: IsECommerceInfrastructureStandbyMode()");
+    NNResult res = NIMIsECommerceInfrastructureStandbyMode((bool *)buf);
+    *standby = buf[0] != 0;
+    return res;
+}
+
+NNResult nimCountry(uint8_t country[8])
+{
+    // The size of nn::nim::Country is unknown, Cemu writes one word.
+    uint8_t buf[0x40] __attribute__((__aligned__(0x40)));
+    OSBlockSet(buf, 0, sizeof(buf));
+    debugPrintf("NIM: GetECommerceInfrastructureCountry()");
+    NNResult res = NIMGetECommerceInfrastructureCountry(buf);
+    OSBlockMove(country, buf, 8, false);
     return res;
 }
 

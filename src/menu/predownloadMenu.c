@@ -617,26 +617,42 @@ static void pdSystemDownload()
         return;
     }
 
-    // Which arguments the system wants is not known, but a refusal comes
-    // back as a result instead of a crash. A usage error with the content
-    // list gets one more try without it, the system may want to pick the
-    // contents itself. Both results end up on the screen.
-    res = nimRegister(&config, pdTmd, true);
-    NNResult second = { .value = 0 };
-    bool retried = NNResult_IsFailure(res) && ((uint32_t)res.value >> 29) == 6; // LEVEL_USAGE
-    if(retried)
-        second = nimRegister(&config, pdTmd, false);
-
-    nimFinalize();
-    if(NNResult_IsFailure(res) && (!retried || NNResult_IsFailure(second)))
+    res = nimRegister(&config, pdTmd->tid);
+    if(NNResult_IsFailure(res))
     {
-        int len = snprintf(txt, sizeof(txt), "%s\n\nnn::nim::RegisterTitlePackageTask(): %#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
-        if(retried && len > 0 && (size_t)len < sizeof(txt))
-            snprintf(txt + len, sizeof(txt) - len, "\nnn::nim::RegisterTitlePackageTask(NULL, 0): %#010x", (unsigned int)second.value);
+        // Everything that may explain the refusal, read before NIM closes:
+        // the error code the system would show for it, the state of the
+        // eShop infrastructure and what the console holds of the title.
+        bool standby = false;
+        uint8_t country[8] = { 0 };
+        NNResult standbyRes = nimStandbyMode(&standby);
+        NNResult countryRes = nimCountry(country);
+        // Last: its object layout is the least known of the three.
+        int32_t code = nimErrorCode(res);
+        nimFinalize();
 
+        MCPTitleListType installed __attribute__((__aligned__(0x40)));
+        bool isInstalled = MCP_GetTitleInfo(mcpHandle, pdTmd->tid, &installed) == 0;
+
+        snprintf(txt, sizeof(txt),
+            "%s\n\n"
+            "nn::nim::RegisterTitlePackageTask(NULL, 0): %#010x\n"
+            "ResultError::GetErrorCode(): %d\n"
+            "IsECommerceInfrastructureStandbyMode(): %#010x, %s\n"
+            "GetECommerceInfrastructureCountry(): %#010x, %02X %02X %02X %02X %02X %02X %02X %02X\n"
+            "Ticket: %s\n"
+            "TMD version: %u, installed: %s%u",
+            localise("The Wii U Download Management refused the title."),
+            (unsigned int)res.value, (int)code,
+            (unsigned int)standbyRes.value, standby ? "true" : "false",
+            (unsigned int)countryRes.value, country[0], country[1], country[2], country[3], country[4], country[5], country[6], country[7],
+            hasTicket(pdTmd->tid) ? "yes" : "no",
+            pdTmd->title_version, isInstalled ? "v" : "no ", isInstalled ? installed.titleVersion : 0);
         showErrorFrame(txt);
         return;
     }
+
+    nimFinalize();
 
     addToScreenLog("\"%s\" added to the Wii U Download Management", pdEntry->name);
     showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD);
