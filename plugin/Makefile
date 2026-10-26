@@ -26,7 +26,10 @@ INCLUDES := src
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
-CFLAGS := -g -Wall -Wextra -Werror -Wshadow -Wpointer-arith -Wcast-align \
+# -Wshadow, which the Makefile of NUSspli uses, is left out on purpose: the
+# WUPS config headers name their constructor arguments after the members they
+# fill in, so the warning fires inside of them and never in this plugin.
+CFLAGS := -g -Wall -Wextra -Werror -Wpointer-arith -Wcast-align \
           -O2 -ffunction-sections \
           $(MACHDEP)
 
