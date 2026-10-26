@@ -77,9 +77,13 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
     config->applicationBoxDevice2 = 1;
     // Byte 0x15 is set to 1 by Cemu, its meaning is unknown.
     ((uint8_t *)config)[0x15] = 1;
-    // Cemu notes 2 as "use the background install policy", which is what
-    // the call of the eShop is named after (its stub leaves 0).
-    config->postDownloadAction = 2;
+    // Cemu notes 2 as "use the background install policy". On a 5.5.5E
+    // console that downloaded YouTube but left the install for the next
+    // start of the title ("start the software to finish the installation"),
+    // which a title that is not installed yet never gets: it has no icon to
+    // start. 0 and 1 are not named anywhere, 1 is the guess for installing
+    // right after the download, the way the eShop does it for a purchase.
+    config->postDownloadAction = 1;
 
     debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tid, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
 }
