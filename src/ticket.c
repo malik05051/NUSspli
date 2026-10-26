@@ -551,6 +551,119 @@ bool hasTicket(uint64_t tid)
     return found;
 }
 
+// Which file a ticket belongs in is not known (the file names have nothing
+// to do with the title IDs), so this is the evidence to find out: a backup of
+// the whole store and a list of where every ticket of it sits. It reads the
+// store the way deleteTicket() does and writes to the SD card only.
+#define TICKET_LIST_SIZE (256 * 1024)
+
+static void writeSdFile(const char *path, const void *data, size_t size)
+{
+    FSAFileHandle fh = openFile(path, "w", 0);
+    if(fh == 0)
+        return;
+
+    if(size != 0)
+        addToIOQueue(data, 1, size, fh);
+
+    addToIOQueue(NULL, 0, 0, fh);
+}
+
+int dumpTicketStore(int *files)
+{
+    char *list = MEMAllocFromDefaultHeap(TICKET_LIST_SIZE);
+    if(list == NULL)
+        return -1;
+
+    size_t used = 0;
+    int tickets = 0;
+    *files = 0;
+
+    char path[FS_MAX_PATH];
+    char backup[FS_MAX_PATH];
+    OSBlockMove(path, TICKET_BUCKET, sizeof(TICKET_BUCKET), false);
+    char *inSentence = path + (sizeof(TICKET_BUCKET) - 1);
+
+    FSADirectoryHandle dir;
+    FSError err = FSAOpenDir(getFSAClient(), path, &dir);
+    if(err != FS_ERROR_OK)
+    {
+        used += snprintf(list + used, TICKET_LIST_SIZE - used, "Error opening %s: %s\n", path, translateFSErr(err));
+        goto write;
+    }
+
+    FSADirectoryEntry entry;
+    FSADirectoryHandle dir2;
+    while(FSAReadDir(getFSAClient(), dir, &entry) == FS_ERROR_OK)
+    {
+        if(!(entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 4)
+            continue;
+
+        strcpy(inSentence, entry.name);
+        if(FSAOpenDir(getFSAClient(), path, &dir2) != FS_ERROR_OK)
+            continue;
+
+        snprintf(backup, sizeof(backup), TICKET_BACKUP_DIR "%s", entry.name);
+        createDirRecursive(backup);
+
+        strcat(inSentence, "/");
+        char *fileName = inSentence + strlen(inSentence);
+        while(FSAReadDir(getFSAClient(), dir2, &entry) == FS_ERROR_OK)
+        {
+            // Directories are skipped by their flag, see deleteTicket().
+            if((entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 12)
+                continue;
+
+            strcpy(fileName, entry.name);
+            void *file;
+            size_t fileSize = readFile(path, &file);
+            if(file == NULL)
+                continue;
+
+            ++*files;
+            snprintf(backup, sizeof(backup), TICKET_BACKUP_DIR "%s", inSentence);
+            writeSdFile(backup, file, fileSize);
+
+            if(used < TICKET_LIST_SIZE)
+                used += snprintf(list + used, TICKET_LIST_SIZE - used, "%s (%u bytes)\n", inSentence, (unsigned int)fileSize);
+
+            uint8_t *fileEnd = ((uint8_t *)file) + fileSize;
+            TICKET *ticket = (TICKET *)file;
+            while(((uint8_t *)ticket) + sizeof(TICKET) <= fileEnd)
+            {
+                uint8_t *ptr = ((uint8_t *)ticket) + sizeof(TICKET);
+                if(ticket->total_hdr_size > 0x14)
+                    ptr += ticket->total_hdr_size - 0x14;
+
+                if(used < TICKET_LIST_SIZE)
+                    used += snprintf(list + used, TICKET_LIST_SIZE - used, "  +0x%04X size %u title %016llX ticket %016llX version %u\n",
+                        (unsigned int)(((uint8_t *)ticket) - ((uint8_t *)file)), (unsigned int)(ptr - (uint8_t *)ticket), ticket->tid, ticket->ticket_id, ticket->title_version);
+
+                ++tickets;
+                if(ptr >= fileEnd)
+                    break;
+
+                ticket = (TICKET *)ptr;
+            }
+
+            MEMFreeToDefaultHeap(file);
+        }
+
+        FSACloseDir(getFSAClient(), dir2);
+    }
+
+    FSACloseDir(getFSAClient(), dir);
+
+write:
+    if(used > TICKET_LIST_SIZE)
+        used = TICKET_LIST_SIZE;
+
+    writeSdFile(TICKET_LIST_PATH, list, used);
+    flushIOQueue();
+    MEMFreeToDefaultHeap(list);
+    return checkForQueueErrors() ? -1 : tickets;
+}
+
 bool hasMagicHeader(const TICKET *ticket)
 {
     for(size_t i = 0; i < sizeof(magic_header); ++i)

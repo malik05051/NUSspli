@@ -649,6 +649,24 @@ static void pdSystemDownload()
             return;
     }
 
+    // Phase one of putting the public ticket of an update into the ticket
+    // store, read only on the console: where the ticket has to go is not
+    // known yet, so the store is backed up to the SD card and listed first.
+    if(fetchTicket)
+    {
+        pdNimWait();
+        int files;
+        int tickets = dumpTicketStore(&files);
+        readInput(); // see pdNimRefused()
+        if(tickets < 0)
+            snprintf(txt, sizeof(txt), "%s", localise("Backing up the ticket store to the SD card failed."));
+        else
+            snprintf(txt, sizeof(txt), "%s\n\n%d / %d\nSD:/NUSspli/ticket-backup/\nSD:/NUSspli-tickets.txt", localise("The ticket store was backed up to the SD card. Nothing was changed on the console."), tickets, files);
+
+        showErrorFrame(txt);
+        return;
+    }
+
     pdNimWait();
     NNResult res = nimInitialize();
     if(NNResult_IsFailure(res))

@@ -24,6 +24,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <file.h>
 #include <titles.h>
 #include <tmd.h>
 
@@ -185,6 +186,13 @@ extern "C"
     void deleteTicket(uint64_t tid);
     // Whether the ticket store of the console holds a ticket for the title.
     bool hasTicket(uint64_t tid);
+    // Read only on the console: copies every file of the ticket store to
+    // TICKET_BACKUP_DIR on the SD card and lists every ticket in it (file,
+    // offset, size, title ID, ticket ID) in TICKET_LIST_PATH. Returns the
+    // number of tickets, -1 when the listing could not be written.
+#define TICKET_BACKUP_DIR NUSDIR_SD "NUSspli/ticket-backup/"
+#define TICKET_LIST_PATH  NUSDIR_SD "NUSspli-tickets.txt"
+    int dumpTicketStore(int *files);
     bool hasMagicHeader(const TICKET *ticket);
 
 #ifdef __cplusplus

@@ -215,5 +215,7 @@
     "A file of this title is no longer on the servers of Nintendo.": "Nid yw un o ffeiliau'r teitl hwn ar weinyddion Nintendo mwyach.",
     "The icon of this title is no longer on the servers of Nintendo.": "Nid yw eicon y teitl hwn ar weinyddion Nintendo mwyach.",
     "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?": "Mae eisoes yn Rheoli Lawrlwythiadau.\nEi dynnu oddi yno, gyda'r hyn a lawrlwythwyd hyd yma?",
-    "Removed from the Wii U Download Management!": "Wedi'i dynnu o Reoli Lawrlwythiadau'r Wii U!"
+    "Removed from the Wii U Download Management!": "Wedi'i dynnu o Reoli Lawrlwythiadau'r Wii U!",
+    "Backing up the ticket store to the SD card failed.": "Methwyd gwneud copi wrth gefn o'r storfa docynnau i'r cerdyn SD.",
+    "The ticket store was backed up to the SD card. Nothing was changed on the console.": "Mae copi wrth gefn o'r storfa docynnau ar y cerdyn SD. Ni newidiwyd dim ar y consol."
 }
