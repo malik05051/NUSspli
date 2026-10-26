@@ -227,5 +227,7 @@
     "A file of this title is no longer on the servers of Nintendo.": "Un archivo de este título ya no está en los servidores de Nintendo.",
     "The icon of this title is no longer on the servers of Nintendo.": "El icono de este título ya no está en los servidores de Nintendo.",
     "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?": "Ya está en la gestión de descargas.\n¿Quitarlo de ahí, con lo que ya se ha descargado?",
-    "Removed from the Wii U Download Management!": "¡Quitado de la gestión de descargas de Wii U!"
+    "Removed from the Wii U Download Management!": "¡Quitado de la gestión de descargas de Wii U!",
+    "Backing up the ticket store to the SD card failed.": "No se pudo hacer la copia de seguridad del almacén de tickets en la tarjeta SD.",
+    "The ticket store was backed up to the SD card. Nothing was changed on the console.": "Se hizo una copia de seguridad del almacén de tickets en la tarjeta SD. No se cambió nada en la consola."
 }

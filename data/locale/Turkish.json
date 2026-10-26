@@ -221,5 +221,7 @@
     "A file of this title is no longer on the servers of Nintendo.": "Bu başlığın bir dosyası artık Nintendo sunucularında değil.",
     "The icon of this title is no longer on the servers of Nintendo.": "Bu başlığın simgesi artık Nintendo sunucularında değil.",
     "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?": "Zaten İndirme Yönetimi'nde.\nŞimdiye kadar indirilenlerle birlikte oradan kaldırılsın mı?",
-    "Removed from the Wii U Download Management!": "Wii U İndirme Yönetimi'nden kaldırıldı!"
+    "Removed from the Wii U Download Management!": "Wii U İndirme Yönetimi'nden kaldırıldı!",
+    "Backing up the ticket store to the SD card failed.": "Bilet deposunun SD karta yedeklenmesi başarısız oldu.",
+    "The ticket store was backed up to the SD card. Nothing was changed on the console.": "Bilet deposu SD karta yedeklendi. Konsolda hiçbir şey değiştirilmedi."
 }
