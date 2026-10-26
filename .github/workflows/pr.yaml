@@ -50,3 +50,24 @@ jobs:
           name: NUSspli-Channel-DEBUG
           path: out/Channel-DEBUG/*
           if-no-files-found: error
+  build-plugin:
+    name: build-plugin
+    runs-on: ubuntu-24.04
+    needs: clang-format
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Build docker image
+        run: |
+          docker build plugin -t pluginbuilder
+      - name: build plugin
+        run: |
+          docker run --rm -v ${PWD}/plugin:/project pluginbuilder make
+      - name: Upload plugin
+        uses: actions/upload-artifact@v7
+        with:
+          name: NUSspli-BackgroundDownloads
+          path: plugin/*.wps
+          if-no-files-found: error

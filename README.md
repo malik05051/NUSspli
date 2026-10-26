@@ -13,6 +13,7 @@ Install content directly from the Nintendo Update Servers to your Wii U.
 - Can download anything available on the NUS.
 - Custom folder names for downloaded titles.
 - Download manager: the queue downloads and installs in the background while you keep browsing.
+- Aroma plugin: finishes unfinished downloads while a game runs and notifies you when they are done, see [plugin/README.md](plugin/README.md).
 - Experimental: hand a title to the Wii U Download Management, which then downloads and installs it like an eShop download.
 - Auto update.
 
