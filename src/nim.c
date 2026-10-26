@@ -40,6 +40,7 @@ extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *con
 // which is how Cemu receives it, and the object holds two words there.
 extern void NIMResultErrorConstruct(void *resultError, const NNResult *result, int32_t unknown) __asm__("Construct__Q3_2nn3nim11ResultErrorFQ2_2nn6Resulti");
 extern int32_t NIMResultErrorGetErrorCode(const void *resultError) __asm__("GetErrorCode__Q3_2nn3nim11ResultErrorCFv");
+extern NNResult NIMUnregisterTitlePackageTask(uint64_t titleId) __asm__("UnregisterTitlePackageTask__Q2_2nn3nimFUL");
 extern NNResult NIMDownloadPatchTitleTicket(uint64_t titleId) __asm__("DownloadPatchTitleTicket__Q2_2nn3nimFUL");
 
 // Every call is logged in front of itself as well: the last line that
@@ -114,6 +115,17 @@ NNResult nimDownloadPatchTicket(uint64_t tid)
     debugPrintf("NIM: DownloadPatchTitleTicket(%016llX)", tid);
     NNResult res = NIMDownloadPatchTitleTicket(tid);
     debugPrintf("NIM: DownloadPatchTitleTicket() returned %#010x", res.value);
+    return res;
+}
+
+// Takes a task out of the Download Management again, with what it has
+// downloaded so far: the call the system has for it, next to the one that
+// would keep the download (UnregisterTitlePackageTaskWithoutCleanup).
+NNResult nimUnregister(uint64_t tid)
+{
+    debugPrintf("NIM: UnregisterTitlePackageTask(%016llX)", tid);
+    NNResult res = NIMUnregisterTitlePackageTask(tid);
+    debugPrintf("NIM: UnregisterTitlePackageTask() returned %#010x", res.value);
     return res;
 }
 
