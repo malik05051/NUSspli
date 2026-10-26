@@ -227,11 +227,6 @@
     "The icon of this title is no longer on the servers of Nintendo.": "The icon of this title is no longer on the servers of Nintendo.",
     "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?": "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?",
     "Removed from the Wii U Download Management!": "Removed from the Wii U Download Management!",
-    "Backing up the ticket store to the SD card failed.": "Backing up the ticket store to the SD card failed.",
-    "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nAdd the free ticket from the servers of Nintendo to the console?\nThe ticket store is backed up to the SD card first.": "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nAdd the free ticket from the servers of Nintendo to the console?\nThe ticket store is backed up to the SD card first.",
-    "The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt": "The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt",
-    "The servers of Nintendo have no ticket for this update.": "The servers of Nintendo have no ticket for this update.",
-    "The ticket from the servers of Nintendo is not the public ticket of this update.": "The ticket from the servers of Nintendo is not the public ticket of this update.",
-    "Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/": "Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/",
-    "Wii U Download Management": "Wii U Download Management"
+    "Wii U Download Management": "Wii U Download Management",
+    "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nDownload and install it with NUSspli in the background instead?\nNUSspli installs the ticket with it.": "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nDownload and install it with NUSspli in the background instead?\nNUSspli installs the ticket with it."
 }
