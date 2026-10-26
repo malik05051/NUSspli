@@ -125,13 +125,40 @@ NNResult nimDownloadPatchTicket(uint64_t tid)
 
 // Takes a task out of the Download Management again, with what it has
 // downloaded so far: the call the system has for it, next to the one that
-// would keep the download (UnregisterTitlePackageTaskWithoutCleanup).
-NNResult nimUnregister(uint64_t tid)
+// would keep the download (UnregisterTitlePackageTaskWithoutCleanup). It
+// takes the ID of the package, not the title ID: a 5.5.5E console refused
+// the title ID with 105-0259 (TITLE_PACKAGE_NOT_FOUND) and listed the
+// package of the very same title as 0x1F.
+NNResult nimUnregister(uint64_t packageId)
 {
-    debugPrintf("NIM: UnregisterTitlePackageTask(%016llX)", tid);
-    NNResult res = NIMUnregisterTitlePackageTask(tid);
+    debugPrintf("NIM: UnregisterTitlePackageTask(%016llX)", packageId);
+    NNResult res = NIMUnregisterTitlePackageTask(packageId);
     debugPrintf("NIM: UnregisterTitlePackageTask() returned %#010x", res.value);
     return res;
+}
+
+bool nimFindPackage(uint64_t tid, uint64_t *packageId)
+{
+    static uint64_t ids[NIM_MAX_PACKAGES] __attribute__((__aligned__(0x40)));
+    static uint8_t infos[NIM_MAX_PACKAGES][NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
+    uint32_t num = nimListPackages(ids, infos, NIM_MAX_PACKAGES);
+
+    // The info block starts with the config the package was registered
+    // with, so with its title ID: the bytes after it on that console were
+    // exactly the config NUSspli had handed over.
+    for(uint32_t i = 0; i < num; ++i)
+    {
+        uint64_t packageTid;
+        OSBlockMove(&packageTid, infos[i], sizeof(packageTid), false);
+        if(packageTid == tid)
+        {
+            *packageId = ids[i];
+            debugPrintf("NIM: package of %016llX is %016llX", tid, ids[i]);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 uint32_t nimListPackages(uint64_t *tids, uint8_t (*infos)[NIM_PACKAGE_INFO_SIZE], uint32_t max)
