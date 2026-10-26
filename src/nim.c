@@ -58,12 +58,18 @@ NNResult nimInitialize()
 // title type of 0 and a region of 0. Cemu only stubs it, so whatever it
 // checks or reads on a console is unknown: the config is filled here the
 // way Cemu fills it instead, which is what the eShop runs with in Cemu.
-void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
+void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version)
 {
     OSBlockSet(config, 0, sizeof(NimTitlePackageTaskConfig));
     config->titleIdHigh = (uint32_t)(tid >> 32);
     config->titleIdLow = (uint32_t)tid;
-    config->regionOrLanguage = 0;
+    // Cemu names the word at 0x08 region or language and leaves it 0, after
+    // the int the eShop hands its config call along with the title ID and
+    // the type. It is the version of the title: the system fetched tmd.0 of
+    // the Wii Sports Club update (seen on a mirror of the secure content
+    // server), which does not exist and was the 404 behind 105-0955, and the
+    // version 0 of YouTube that does exist is what it installed.
+    config->titleVersion = version;
     // The values of nn::Cafe::TitleType are not documented. The category of
     // the title ID fits the byte (0x00 for a game, 0x02 for a demo, 0x0C
     // for DLC, 0x0E for an update) and the system accepted it for both an
@@ -84,7 +90,7 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
     // for a purchase.
     config->postDownloadAction = 1;
 
-    debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tid, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
+    debugPrintf("NIM config for %016llX v%u: type %u, devices %u/%u, action %u", tid, version, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
 }
 
 // The contents are left to the system: the content list of the TMD was
