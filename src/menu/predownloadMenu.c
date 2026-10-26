@@ -651,6 +651,39 @@ static void pdSystemDownload()
     res = nimRegister(&config, pdTmd->tid);
     if(NNResult_IsFailure(res))
     {
+        // A task that is there already can be taken out again. That is
+        // also the way out when it keeps the Download Management from
+        // opening.
+        if(nimErrorCode(res) == 1050583) // TITLE_PACKAGE_ALREADY_REGISTERED
+        {
+            readInput(); // see pdNimRefused()
+            snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+                localise("It is already in the Download Management.\nRemove it from there, with what it downloaded so far?"),
+                localise("Yes"), localise("No"));
+            ans = pdAskAnswer(uiShowOverlay(txt));
+            if(ans != 1)
+            {
+                nimFinalize();
+                if(ans < 0)
+                    pdFinish(0);
+                return;
+            }
+
+            pdNimWait();
+            res = nimUnregister(pdTmd->tid);
+            if(NNResult_IsFailure(res))
+            {
+                pdNimRefused(res);
+                return;
+            }
+
+            nimFinalize();
+            readInput();
+            addToScreenLog("\"%s\" removed from the Wii U Download Management", pdEntry->name);
+            showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD_REMOVED);
+            return;
+        }
+
         pdNimRefused(res);
         return;
     }

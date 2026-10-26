@@ -81,6 +81,9 @@ extern "C"
     // Fetches the ticket of an update from the servers of Nintendo, which
     // the registration of an update without one needs.
     NNResult nimDownloadPatchTicket(uint64_t tid);
+    // Removes the task of a title from the Download Management, with what
+    // it has downloaded so far.
+    NNResult nimUnregister(uint64_t tid);
     // The system picks the contents of the title itself.
     NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid);
 
