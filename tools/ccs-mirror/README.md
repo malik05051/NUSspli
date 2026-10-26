@@ -8,14 +8,18 @@ It answers from the public CDN that NUSspli itself downloads from.
 NUSspli can hand a title to the Download Management of the Wii U (X in the
 predownload menu). The system then downloads the title files from Nintendo's
 secure content server `https://ccs.wup.shop.nintendo.net/ccs/download/<title ID>/<file>`.
-Since the eShop closed, that server answers **404** for some files that the
-public CDN `http://ccs.cdn.wup.shop.nintendo.net/ccs/download/...` still
-serves. For example, the update of Wii Sports Club fails with **105-0955**
-(`BOSS_HTTP_ERROR_404_NOT_FOUND`), while its TMD and its ticket are on the CDN.
 
-This server answers the same paths from the public CDN. The console's DNS
-points `ccs.wup.shop.nintendo.net` at it, and every other Nintendo server
-stays untouched.
+This server answers the same paths from the public CDN
+`http://ccs.cdn.wup.shop.nintendo.net/ccs/download/...` that NUSspli itself
+downloads from. The console's DNS points `ccs.wup.shop.nintendo.net` at it, and
+every other Nintendo server stays untouched.
+
+It also logs what the console asks for, which the secure server never shows.
+That log found the cause of **105-0955** (`BOSS_HTTP_ERROR_404_NOT_FOUND`) for
+the update of Wii Sports Club. The console asked for `tmd.0`, a version that
+does not exist, because NUSspli left the version in the task config at 0. Since
+that fix the mirror is a fallback for a file the secure server really lost, and
+a way to see what the Download Management fetches.
 
 ## What it does not do
 
