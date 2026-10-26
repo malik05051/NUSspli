@@ -190,9 +190,24 @@ extern "C"
     // TICKET_BACKUP_DIR on the SD card and lists every ticket in it (file,
     // offset, size, title ID, ticket ID) in TICKET_LIST_PATH. Returns the
     // number of tickets, -1 when the listing could not be written.
+    // misplaced counts the tickets that are not in the file addUpdateTicket()
+    // would put them in.
 #define TICKET_BACKUP_DIR NUSDIR_SD "NUSspli/ticket-backup/"
 #define TICKET_LIST_PATH  NUSDIR_SD "NUSspli-tickets.txt"
-    int dumpTicketStore(int *files);
+    int dumpTicketStore(int *files, int *misplaced);
+
+    typedef enum
+    {
+        ADD_TICKET_OK,
+        ADD_TICKET_NOT_ON_SERVER,
+        ADD_TICKET_INVALID,
+        ADD_TICKET_WRITE_FAILED,
+    } ADD_TICKET_RESULT;
+
+    // Puts the public ticket the servers of Nintendo give anyone for an
+    // update (its cetk) into the ticket store of the console. For updates
+    // without a ticket on the console only, see ticket.c.
+    ADD_TICKET_RESULT addUpdateTicket(uint64_t tid);
     bool hasMagicHeader(const TICKET *ticket);
 
 #ifdef __cplusplus

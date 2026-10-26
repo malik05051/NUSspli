@@ -649,44 +649,72 @@ static void pdSystemDownload()
             return;
     }
 
-    // Phase one of putting the public ticket of an update into the ticket
-    // store, read only on the console: where the ticket has to go is not
-    // known yet, so the store is backed up to the SD card and listed first.
+    // An update without its ticket downloads, but does not install
+    // (105-3683): its public ticket goes into the ticket store first, after
+    // a backup of the store. A refusal below takes it out again.
+    bool addedTicket = false;
     if(fetchTicket)
     {
+        snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+            localise("There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nAdd the free ticket from the servers of Nintendo to the console?\nThe ticket store is backed up to the SD card first."),
+            localise("Yes"), localise("No"));
+        ans = pdAskAnswer(uiShowOverlay(txt));
+        if(ans < 0)
+        {
+            pdFinish(0);
+            return;
+        }
+
+        if(ans == 0)
+            return;
+
         pdNimWait();
         int files;
-        int tickets = dumpTicketStore(&files);
-        readInput(); // see pdNimRefused()
-        if(tickets < 0)
-            snprintf(txt, sizeof(txt), "%s", localise("Backing up the ticket store to the SD card failed."));
+        int misplaced;
+        const char *err = NULL;
+        if(dumpTicketStore(&files, &misplaced) < 0)
+            err = localise("Backing up the ticket store to the SD card failed.");
+        else if(misplaced != 0)
+            err = localise("The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt");
         else
-            snprintf(txt, sizeof(txt), "%s\n\n%d / %d\nSD:/NUSspli/ticket-backup/\nSD:/NUSspli-tickets.txt", localise("The ticket store was backed up to the SD card. Nothing was changed on the console."), tickets, files);
+        {
+            switch(addUpdateTicket(pdTmd->tid))
+            {
+                case ADD_TICKET_OK:
+                    addedTicket = true;
+                    addToScreenLog("Ticket of \"%s\" added to the ticket store", pdEntry->name);
+                    break;
+                case ADD_TICKET_NOT_ON_SERVER:
+                    err = localise("The servers of Nintendo have no ticket for this update.");
+                    break;
+                case ADD_TICKET_INVALID:
+                    err = localise("The ticket from the servers of Nintendo is not the public ticket of this update.");
+                    break;
+                default:
+                    err = localise("Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/");
+                    break;
+            }
+        }
 
-        showErrorFrame(txt);
-        return;
+        if(err != NULL)
+        {
+            readInput(); // see pdNimRefused()
+            showErrorFrame(err);
+            return;
+        }
     }
 
     pdNimWait();
     NNResult res = nimInitialize();
     if(NNResult_IsFailure(res))
     {
+        if(addedTicket)
+            deleteTicket(pdTmd->tid);
+
         readInput();
         snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
         showErrorFrame(txt);
         return;
-    }
-
-    // An update without its ticket is refused (105-0955), the system
-    // fetches the ticket of an update itself on request.
-    if(fetchTicket)
-    {
-        res = nimDownloadPatchTicket(pdTmd->tid);
-        if(NNResult_IsFailure(res))
-        {
-            pdNimRefused(res);
-            return;
-        }
     }
 
     NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
@@ -751,6 +779,11 @@ static void pdSystemDownload()
             showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD_REMOVED);
             return;
         }
+
+        // Nothing of this title is in the Download Management, so its
+        // ticket goes again: the console is left as it was.
+        if(addedTicket)
+            deleteTicket(pdTmd->tid);
 
         pdNimRefused(res);
         return;
