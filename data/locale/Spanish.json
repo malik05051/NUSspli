@@ -233,5 +233,6 @@
     "The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt": "El almacén de tickets de esta consola no está organizado como se esperaba,\nasí que no se cambió nada. Ver SD:/NUSspli-tickets.txt",
     "The servers of Nintendo have no ticket for this update.": "Los servidores de Nintendo no tienen ticket para esta actualización.",
     "The ticket from the servers of Nintendo is not the public ticket of this update.": "El ticket de los servidores de Nintendo no es el ticket público de esta actualización.",
-    "Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/": "No se pudo añadir el ticket. La copia de seguridad del almacén de tickets\nestá en la tarjeta SD: SD:/NUSspli/ticket-backup/"
+    "Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/": "No se pudo añadir el ticket. La copia de seguridad del almacén de tickets\nestá en la tarjeta SD: SD:/NUSspli/ticket-backup/",
+    "Wii U Download Management": "Gestión de descargas de Wii U"
 }

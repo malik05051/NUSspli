@@ -30,6 +30,7 @@
 #include <downloader.h>
 #include <filesystem.h>
 #include <input.h>
+#include <ioQueue.h>
 #include <menu/engineFrames.h>
 #include <menu/predownload.h>
 #include <menu/utils.h>
@@ -608,6 +609,84 @@ static void pdNimPackages(NNResult res)
             len += snprintf(txt + len, sizeof(txt) - len, " %02X", infos[i][j]);
     }
 
+    showErrorFrame(txt);
+}
+
+// The Wii U Download Management opens to a blank screen while it holds some
+// of the packages NUSspli registered, and opens again once NUSspli removed
+// them. What it misses is not known, so this shows every package it holds
+// (the eShop's as well) with its whole info block: the config it was
+// registered with (0x00 to 0x17), the bytes (0x18 total, 0x20 downloaded),
+// the error (0x40) and the state (0x48). Comparing a package of NUSspli with
+// one of the eShop is how to find the difference. Nothing is changed.
+void systemDownloadsInfo()
+{
+    static uint64_t ids[NIM_MAX_PACKAGES] __attribute__((__aligned__(0x40)));
+    static uint8_t infos[NIM_MAX_PACKAGES][NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
+    static char dump[NIM_MAX_PACKAGES * 512];
+    char txt[1024];
+
+    pdNimWait();
+    NNResult res = nimInitialize();
+    if(NNResult_IsFailure(res))
+    {
+        readInput(); // see pdNimRefused()
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        showErrorFrame(txt);
+        return;
+    }
+
+    uint32_t num = nimListPackages(ids, infos, NIM_MAX_PACKAGES);
+    int len = snprintf(txt, sizeof(txt), "%s: %u\n", localise("Wii U Download Management"), (unsigned int)num);
+    int dumpLen = 0;
+    for(uint32_t i = 0; i < num; ++i)
+    {
+        uint64_t tid;
+        uint64_t total;
+        uint64_t done;
+        uint32_t version;
+        uint32_t error[2];
+        OSBlockMove(&tid, infos[i], sizeof(tid), false);
+        OSBlockMove(&version, infos[i] + 0x08, sizeof(version), false);
+        OSBlockMove(&total, infos[i] + 0x18, sizeof(total), false);
+        OSBlockMove(&done, infos[i] + 0x20, sizeof(done), false);
+        OSBlockMove(error, infos[i] + 0x40, sizeof(error), false);
+        int32_t code = error[0] == 0 && error[1] == 0 ? 0 : nimPackageErrorCode(infos[i]);
+
+        if(len > 0 && (size_t)len < sizeof(txt))
+            len += snprintf(txt + len, sizeof(txt) - len, "\n%016llX v%u: state %u, %llu / %llu KB, %03d-%04d\n  ",
+                tid, (unsigned int)version, infos[i][0x48], done >> 10, total >> 10, (int)(code / 10000), (int)(code % 10000));
+        for(int j = 0x0C; j < 0x18 && len > 0 && (size_t)len < sizeof(txt); ++j)
+            len += snprintf(txt + len, sizeof(txt) - len, " %02X", infos[i][j]);
+
+        if(dumpLen >= 0 && (size_t)dumpLen < sizeof(dump))
+            dumpLen += snprintf(dump + dumpLen, sizeof(dump) - dumpLen, "package %016llX: title %016llX state %u error %03d-%04d", ids[i], tid, infos[i][0x48], (int)(code / 10000), (int)(code % 10000));
+        for(int j = 0; j < NIM_PACKAGE_INFO_SIZE && dumpLen >= 0 && (size_t)dumpLen < sizeof(dump); ++j)
+            dumpLen += snprintf(dump + dumpLen, sizeof(dump) - dumpLen, j % 16 == 0 ? "\n  %02X" : " %02X", infos[i][j]);
+        if(dumpLen >= 0 && (size_t)dumpLen < sizeof(dump))
+            dumpLen += snprintf(dump + dumpLen, sizeof(dump) - dumpLen, "\n");
+    }
+
+    nimFinalize();
+
+    if(dumpLen < 0)
+        dumpLen = 0;
+    else if((size_t)dumpLen > sizeof(dump))
+        dumpLen = sizeof(dump);
+
+    FSAFileHandle fh = openFile(SYSTEM_DOWNLOADS_PATH, "w", 0);
+    if(fh != 0)
+    {
+        if(dumpLen != 0)
+            addToIOQueue(dump, 1, dumpLen, fh);
+        addToIOQueue(NULL, 0, 0, fh);
+        flushIOQueue();
+    }
+
+    if(len > 0 && (size_t)len < sizeof(txt))
+        snprintf(txt + len, sizeof(txt) - len, "\n\nSD:/NUSspli-downloads.txt");
+
+    readInput(); // see pdNimRefused()
     showErrorFrame(txt);
 }
 

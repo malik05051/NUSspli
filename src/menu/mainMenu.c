@@ -32,6 +32,7 @@
 #include <menu/logs.h>
 #include <menu/main.h>
 #include <menu/missingcontent.h>
+#include <menu/predownload.h>
 #include <menu/queue.h>
 #include <menu/titlebrowser.h>
 #include <menu/utils.h>
@@ -72,6 +73,7 @@ static void renderMainMenuFrame()
     textToFrame(line++, 4, localise("Options"));
     textToFrame(line++, 4, localise("Logs"));
     textToFrame(line++, 4, localise("Download manager"));
+    textToFrame(line++, 4, localise("Wii U Download Management"));
 
     textToFrame(7, MAX_CHARS - 27, localise("Developers:"));
     textToFrame(8, MAX_CHARS - 26, "• DaThinkingChair");
@@ -144,17 +146,20 @@ static void updateMainMenu()
             case 18:
                 downloadManagerMenu();
                 break;
+            case 19:
+                systemDownloadsInfo();
+                break;
         }
     }
     else if(vpad.trigger & VPAD_BUTTON_DOWN)
     {
-        if(++cursorPos == 19)
+        if(++cursorPos == 20)
             cursorPos = 11;
     }
     else if(vpad.trigger & VPAD_BUTTON_UP)
     {
         if(--cursorPos == 10)
-            cursorPos = 18;
+            cursorPos = 19;
     }
 }
 
