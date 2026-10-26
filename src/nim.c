@@ -40,6 +40,11 @@ extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *con
 // which is how Cemu receives it, and the object holds two words there.
 extern void NIMResultErrorConstruct(void *resultError, const NNResult *result, int32_t unknown) __asm__("Construct__Q3_2nn3nim11ResultErrorFQ2_2nn6Resulti");
 extern int32_t NIMResultErrorGetErrorCode(const void *resultError) __asm__("GetErrorCode__Q3_2nn3nim11ResultErrorCFv");
+// The packages the Download Management holds, as Cemu emulates them: the
+// number, their title IDs and a 0x50 byte info block per title ID.
+extern uint32_t NIMGetNumTitlePackages(void) __asm__("GetNumTitlePackages__Q2_2nn3nimFv");
+extern NNResult NIMListTitlePackagesStatically(uint64_t *titleIds, uint32_t max) __asm__("ListTitlePackagesStatically__Q2_2nn3nimFPULUi");
+extern NNResult NIMGetTitlePackageInfos(void *infos, const uint64_t *titleIds, uint32_t count) __asm__("GetTitlePackageInfos__Q2_2nn3nimFPQ3_2nn3nim16TitlePackageInfoPCULUi");
 extern NNResult NIMUnregisterTitlePackageTask(uint64_t titleId) __asm__("UnregisterTitlePackageTask__Q2_2nn3nimFUL");
 extern NNResult NIMDownloadPatchTitleTicket(uint64_t titleId) __asm__("DownloadPatchTitleTicket__Q2_2nn3nimFUL");
 
@@ -127,6 +132,27 @@ NNResult nimUnregister(uint64_t tid)
     NNResult res = NIMUnregisterTitlePackageTask(tid);
     debugPrintf("NIM: UnregisterTitlePackageTask() returned %#010x", res.value);
     return res;
+}
+
+uint32_t nimListPackages(uint64_t *tids, uint8_t (*infos)[NIM_PACKAGE_INFO_SIZE], uint32_t max)
+{
+    debugPrintf("NIM: GetNumTitlePackages()");
+    uint32_t num = NIMGetNumTitlePackages();
+    debugPrintf("NIM: %u packages", num);
+    if(num > max)
+        num = max;
+
+    if(num == 0)
+        return 0;
+
+    OSBlockSet(tids, 0, sizeof(uint64_t) * max);
+    OSBlockSet(infos, 0, NIM_PACKAGE_INFO_SIZE * max);
+    NNResult res = NIMListTitlePackagesStatically(tids, num);
+    debugPrintf("NIM: ListTitlePackagesStatically() returned %#010x", res.value);
+    res = NIMGetTitlePackageInfos(infos, tids, num);
+    debugPrintf("NIM: GetTitlePackageInfos() returned %#010x", res.value);
+    (void)res; // Only read by the debug log
+    return num;
 }
 
 int32_t nimErrorCode(NNResult res)
