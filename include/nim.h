@@ -81,6 +81,10 @@ extern "C"
     // Fetches the ticket of an update from the servers of Nintendo, which
     // the registration of an update without one needs.
     NNResult nimDownloadPatchTicket(uint64_t tid);
+    // What the Download Management holds: up to max title IDs, each with
+    // the info block of its package (0x50 bytes in Cemu), and how many.
+#define NIM_PACKAGE_INFO_SIZE 0x50
+    uint32_t nimListPackages(uint64_t *tids, uint8_t (*infos)[NIM_PACKAGE_INFO_SIZE], uint32_t max);
     // Removes the task of a title from the Download Management, with what
     // it has downloaded so far.
     NNResult nimUnregister(uint64_t tid);

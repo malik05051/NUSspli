@@ -586,6 +586,31 @@ static void pdNimRefused(NNResult res)
     showErrorFrame(txt);
 }
 
+// A removal the system refused although the registration says the title
+// is there: shows the error code with the packages the system lists, the
+// title ID and the first bytes of the info block of each.
+#define PD_NIM_MAX_PACKAGES 6
+static void pdNimPackages(NNResult res)
+{
+    static uint64_t tids[PD_NIM_MAX_PACKAGES] __attribute__((__aligned__(0x40)));
+    static uint8_t infos[PD_NIM_MAX_PACKAGES][NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
+    uint32_t num = nimListPackages(tids, infos, PD_NIM_MAX_PACKAGES);
+    int32_t code = nimErrorCode(res);
+    nimFinalize();
+    readInput(); // see pdNimRefused()
+
+    char txt[1024];
+    int len = snprintf(txt, sizeof(txt), "%s\n\n%03d-%04d\n\nnn::nim packages: %u", localise("The Wii U Download Management refused the title."), (int)(code / 10000), (int)(code % 10000), (unsigned int)num);
+    for(uint32_t i = 0; i < num && len > 0 && (size_t)len < sizeof(txt); ++i)
+    {
+        len += snprintf(txt + len, sizeof(txt) - len, "\n%016llX:", tids[i]);
+        for(int j = 8; j < 0x18 && len > 0 && (size_t)len < sizeof(txt); ++j)
+            len += snprintf(txt + len, sizeof(txt) - len, " %02X", infos[i][j]);
+    }
+
+    showErrorFrame(txt);
+}
+
 // Hands the title to the Wii U Download Management instead of downloading
 // it here: the system downloads and installs it in the background and lists
 // it there, see nim.h. It installs with the ticket the console has, so a
@@ -673,7 +698,9 @@ static void pdSystemDownload()
             res = nimUnregister(pdTmd->tid);
             if(NNResult_IsFailure(res))
             {
-                pdNimRefused(res);
+                // Registered by title ID but not found by it to remove:
+                // what does the Download Management hold?
+                pdNimPackages(res);
                 return;
             }
 
