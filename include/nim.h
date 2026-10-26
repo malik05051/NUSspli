@@ -57,7 +57,7 @@ extern "C"
     {
         uint32_t titleIdHigh;
         uint32_t titleIdLow;
-        uint32_t regionOrLanguage;
+        uint32_t titleVersion; // Cemu calls it region or language, see nimMakeConfig()
         uint8_t titleType;
         uint8_t applicationBoxDevice1;
         WUT_UNKNOWN_BYTES(1);
@@ -67,7 +67,7 @@ extern "C"
         WUT_UNKNOWN_BYTES(1);
     } NimTitlePackageTaskConfig;
     WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x00, titleIdHigh);
-    WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x08, regionOrLanguage);
+    WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x08, titleVersion);
     WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x0C, titleType);
     WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x0F, applicationBoxDevice2);
     WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x16, postDownloadAction);
@@ -77,7 +77,7 @@ extern "C"
     // NNResult stops the handoff on a failure, and nimFinalize() closes
     // what nimInitialize() opened.
     NNResult nimInitialize();
-    void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid);
+    void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version);
     // Fetches the ticket of an update from the servers of Nintendo, which
     // the registration of an update without one needs.
     NNResult nimDownloadPatchTicket(uint64_t tid);
