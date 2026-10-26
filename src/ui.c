@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <input.h>
+#include <menu/engineFrames.h>
 #include <menu/utils.h>
 #include <renderer.h>
 #include <state.h>
@@ -134,6 +135,66 @@ static spinlock eventLock = SPINLOCK_FREE;
 static char pendingError[UI_ERROR_MSG];
 static bool errorPending = false;
 
+// The call another thread handed over, see uiCallOnMain. One slot: the
+// queue thread is the only one that hands calls over and it waits for
+// every answer.
+static spinlock callLock = SPINLOCK_FREE;
+static UiMainCall pendingCall = NULL;
+static void *pendingArg;
+static volatile bool callDone;
+static int callResult;
+
+static void runPendingCall()
+{
+    spinLock(callLock);
+    UiMainCall fn = pendingCall;
+    void *arg = pendingArg;
+    pendingCall = NULL;
+    spinReleaseLock(callLock);
+
+    if(fn == NULL)
+        return;
+
+    callResult = fn(arg);
+    OSMemoryBarrier();
+    callDone = true;
+}
+
+int uiCallOnMain(UiMainCall fn, void *arg)
+{
+    if(isMainThread())
+        return fn(arg);
+
+    spinLock(callLock);
+    pendingArg = arg;
+    callDone = false;
+    pendingCall = fn;
+    spinReleaseLock(callLock);
+
+    while(!callDone)
+    {
+        if(!AppRunning(false))
+        {
+            // Withdraw the call unless the loop took it already: a taken
+            // call runs a dialog on the main thread right now, which ends
+            // on its own, and the arguments live on this stack until then.
+            spinLock(callLock);
+            bool withdrawn = pendingCall == fn;
+            if(withdrawn)
+                pendingCall = NULL;
+            spinReleaseLock(callLock);
+
+            if(withdrawn)
+                return 0;
+        }
+
+        OSSleepTicks(UI_WAIT_TICKS);
+    }
+
+    OSMemoryBarrier();
+    return callResult;
+}
+
 void uiDrainEvents()
 {
     char msg[UI_ERROR_MSG];
@@ -142,6 +203,9 @@ void uiDrainEvents()
     // - so this is where the HOME press the ProcUI callback noted is answered.
     // Before the error below: an unrecoverable one ends the app anyway.
     exitOnHomePress();
+
+    // A dialog the queue thread waits for, see uiCallOnMain.
+    runPendingCall();
 
     spinLock(eventLock);
     bool pending = errorPending;
@@ -266,8 +330,28 @@ void uiSetResult(int result)
     modalResult = result;
 }
 
+typedef struct
+{
+    const UIScreen *screen;
+    void *param;
+} UiModalCall;
+
+static int modalOnMain(void *arg)
+{
+    UiModalCall *call = (UiModalCall *)arg;
+    return uiModal(call->screen, call->param);
+}
+
 int uiModal(const UIScreen *screen, void *param)
 {
+    // The stack belongs to the main thread: a dialog of the queue thread
+    // runs there and the thread waits for its result.
+    if(!isMainThread())
+    {
+        UiModalCall call = { .screen = screen, .param = param };
+        return uiCallOnMain(modalOnMain, &call);
+    }
+
     int base = stackTop;
     modalResult = 0;
     uiPush(screen, param);
@@ -427,6 +511,10 @@ void uiFrame()
 
 void uiWaitKey()
 {
+    // Nobody looks at the queue thread, so there is no key to wait for.
+    if(!isMainThread())
+        return;
+
     while(AppRunning(true))
     {
         tickClock();
@@ -443,6 +531,14 @@ void uiWaitKey()
 
 void uiWaitWhile(volatile bool *condition, UiWaitFrame frame, void *ctx)
 {
+    if(!isMainThread())
+    {
+        while(condition != NULL && *condition && AppRunning(false))
+            uiPump(frame, ctx);
+
+        return;
+    }
+
     while(condition != NULL && *condition && AppRunning(true))
     {
         // Same ownership as uiPump: the frame the callback fills belongs to
@@ -468,6 +564,18 @@ void uiWaitWhile(volatile bool *condition, UiWaitFrame frame, void *ctx)
 
 void uiPump(UiWaitFrame frame, void *ctx)
 {
+    // The queue thread hands its frame to the progress screen of the
+    // download manager instead of drawing it and keeps the pace by
+    // sleeping the frame it would have presented.
+    if(!isMainThread())
+    {
+        if(frame != NULL)
+            publishEngineFrame(frame, ctx);
+
+        uiYield();
+        return;
+    }
+
     // First, not last: a dialog can be pumped from inside uiDrainEvents or
     // readInput and has to see the marker when it pops.
     engineFlow = true;
@@ -506,18 +614,41 @@ void uiYield()
     OSSleepTicks(UI_WAIT_TICKS);
 }
 
+// What uiShowOverlay hands out on the queue thread: its breadcrumb is the
+// status line of the progress screen, not an overlay of the renderer.
+static char backgroundOverlay;
+
 void *uiShowOverlay(const char *text)
 {
+    if(!isMainThread())
+    {
+        publishEngineStatus(text);
+        return &backgroundOverlay;
+    }
+
     return addErrorOverlay(text);
 }
 
 void uiHideOverlay(void *overlay)
 {
+    if(overlay == &backgroundOverlay)
+    {
+        publishEngineStatus(NULL);
+        return;
+    }
+
     removeErrorOverlay(overlay);
 }
 
 void uiPresentFrame()
 {
+    // A wait loop of the queue thread: nothing to present, keep the pace.
+    if(!isMainThread())
+    {
+        uiYield();
+        return;
+    }
+
     drawFrame();
 }
 

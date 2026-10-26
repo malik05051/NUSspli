@@ -197,5 +197,32 @@
     "unknown": "unbekannten",
     "Yes": "Ja",
     "No": "Nein",
-    "File": "Datei"
+    "File": "Datei",
+
+    "\uE002 to download in the background": "\uE002 zum Herunterladen im Hintergrund",
+    "\uE045 to show the progress": "\uE045 zum Anzeigen des Fortschritts",
+    "\uE045 to add to the download manager": "\uE045 zum Hinzufügen zum Download-Manager",
+    "Download manager": "Download-Manager",
+    "Wait for the download manager to finish first.": "Warte, bis der Download-Manager fertig ist.",
+    "The queue is empty": "Die Warteschlange ist leer",
+    "\uE002 to cancel the downloads": "\uE002 zum Abbrechen der Downloads",
+
+    "\uE002 Download Management": "\uE002 Download-Verwaltung",
+    "Added to the Wii U Download Management!": "Zur Wii U-Downloadverwaltung hinzugefügt!",
+    "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "Für diesen Titel ist kein Ticket auf der Konsole,\ndie Wii U-Downloadverwaltung wird ihn vermutlich nicht installieren können.\n\nTrotzdem hinzufügen?",
+    "The Wii U Download Management refused the title.": "Die Wii U-Downloadverwaltung hat den Titel abgelehnt.",
+    "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?": "Experimentell: Die Wii U-Downloadverwaltung lädt und installiert\ndiesen Titel selbst, wenn die Server von Nintendo noch alle Daten dazu haben.\n\nFortfahren?",
+    "It is already in the Download Management.\nClear it there first.": "Er ist bereits in der Downloadverwaltung.\nLösche ihn dort zuerst.",
+    "It is already installed.": "Er ist bereits installiert.",
+    "A file of this title is no longer on the servers of Nintendo.": "Eine Datei dieses Titels ist nicht mehr auf den Servern von Nintendo.",
+    "The icon of this title is no longer on the servers of Nintendo.": "Das Symbol dieses Titels ist nicht mehr auf den Servern von Nintendo.",
+    "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?": "Er ist bereits in der Downloadverwaltung.\nDort entfernen, mit dem bisher Heruntergeladenen?",
+    "Removed from the Wii U Download Management!": "Aus der Wii U-Downloadverwaltung entfernt!",
+    "Backing up the ticket store to the SD card failed.": "Die Sicherung des Ticketspeichers auf die SD-Karte ist fehlgeschlagen.",
+    "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nAdd the free ticket from the servers of Nintendo to the console?\nThe ticket store is backed up to the SD card first.": "Für dieses Update gibt es kein Ticket auf der Konsole, die Wii U-\nDownloadverwaltung würde es herunterladen, aber nicht installieren können.\n\nDas kostenlose Ticket von den Servern von Nintendo zur Konsole hinzufügen?\nDer Ticketspeicher wird vorher auf der SD-Karte gesichert.",
+    "The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt": "Der Ticketspeicher dieser Konsole ist nicht wie erwartet aufgebaut,\ndaher wurde nichts geändert. Siehe SD:/NUSspli-tickets.txt",
+    "The servers of Nintendo have no ticket for this update.": "Die Server von Nintendo haben kein Ticket für dieses Update.",
+    "The ticket from the servers of Nintendo is not the public ticket of this update.": "Das Ticket von den Servern von Nintendo ist nicht das öffentliche Ticket dieses Updates.",
+    "Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/": "Das Hinzufügen des Tickets ist fehlgeschlagen. Die Sicherung des Ticketspeichers\nliegt auf der SD-Karte: SD:/NUSspli/ticket-backup/",
+    "Wii U Download Management": "Wii U-Downloadverwaltung"
 }

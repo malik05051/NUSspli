@@ -24,6 +24,7 @@
 #include <input.h>
 #include <list.h>
 #include <localisation.h>
+#include <menu/engineFrames.h>
 #include <menu/main.h>
 #include <menu/queue.h>
 #include <menu/utils.h>
@@ -58,6 +59,24 @@ static void enterQueueMenu(void *param)
     mov = getListSize(titleQueue) >= MAX_ENTRIES;
 }
 
+// The list shrinks on its own while the download manager runs: keep the
+// view inside of it.
+static void clampQueueView()
+{
+    size_t size = getListSize(titleQueue);
+    mov = size >= MAX_ENTRIES;
+    if(size == 0)
+    {
+        cursor = pos = 0;
+        return;
+    }
+
+    if(pos >= size)
+        pos = 0;
+    if(cursor + pos >= size)
+        cursor = size - pos - 1;
+}
+
 static void renderQueueMenu()
 {
     startNewFrame();
@@ -70,6 +89,8 @@ static void renderQueueMenu()
     TitleData *data;
     MCPRegion region;
 
+    lockQueue();
+    const TitleData *active = getActiveQueueEntry();
     forEachListEntry(titleQueue, data)
     {
         if(drawPos)
@@ -125,13 +146,31 @@ static void renderQueueMenu()
         }
 
         flagToFrame(i, SPACER + 3, region);
-        textToFrameCut(i, SPACER + 6, toScreen, (SCREEN_WIDTH - (FONT_SIZE << 1)) - (getSpaceWidth() * SPACER_END));
+        // The entry the download manager works on right now.
+        if(data == active)
+            textToFrameColoredCut(i, SPACER + 6, toScreen, SCREEN_COLOR_GREEN, (SCREEN_WIDTH - (FONT_SIZE << 1)) - (getSpaceWidth() * SPACER_END));
+        else
+            textToFrameCut(i, SPACER + 6, toScreen, (SCREEN_WIDTH - (FONT_SIZE << 1)) - (getSpaceWidth() * SPACER_END));
 
         if(i == MAX_ENTRIES)
             break;
     }
+    unlockQueue();
 
-    textToFrame(MAX_LINES - 2, ALIGNED_CENTER, localise("Press " BUTTON_B " to return"));
+    if(queueRunning())
+    {
+        strcpy(toScreen, localise("Press " BUTTON_B " to return"));
+        strcat(toScreen, " || ");
+        strcat(toScreen, localise(BUTTON_PLUS " to show the progress"));
+        textToFrame(MAX_LINES - 2, ALIGNED_CENTER, toScreen);
+        textToFrame(MAX_LINES - 1, ALIGNED_CENTER, localise(BUTTON_MINUS " to delete an item"));
+        return;
+    }
+
+    strcpy(toScreen, localise("Press " BUTTON_B " to return"));
+    strcat(toScreen, " || ");
+    strcat(toScreen, localise(BUTTON_X " to download in the background"));
+    textToFrame(MAX_LINES - 2, ALIGNED_CENTER, toScreen);
 
     strcpy(toScreen, localise(BUTTON_PLUS " to start the queue"));
     strcat(toScreen, " || ");
@@ -147,6 +186,27 @@ static void updateQueueMenu()
     {
         uiSetResult(0);
         uiPop();
+        return;
+    }
+
+    // The download manager takes finished entries out of the list: show
+    // that once a second.
+    if(queueRunning() && uiFrameCount() % FRAMERATE == 0)
+    {
+        clampQueueView();
+        uiInvalidate();
+    }
+
+    // Nothing left to move over (the run in the background may still be
+    // finishing its last entry).
+    if(getListSize(titleQueue) == 0)
+    {
+        if(!queueRunning())
+        {
+            uiSetResult(0);
+            uiPop();
+        }
+
         return;
     }
 
@@ -256,7 +316,23 @@ static void updateQueueMenu()
         }
     }
 
-    if(vpad.trigger & VPAD_BUTTON_PLUS)
+    if(vpad.trigger & VPAD_BUTTON_X && !queueRunning())
+    {
+        // Back to the menus: the queue keeps running behind them.
+        if(startQueueInBackground())
+        {
+            uiSetResult(0);
+            uiPop();
+            return;
+        }
+    }
+
+    if(vpad.trigger & VPAD_BUTTON_PLUS && queueRunning())
+    {
+        queueProgressMenu();
+        clampQueueView();
+    }
+    else if(vpad.trigger & VPAD_BUTTON_PLUS)
     {
         if(proccessQueue())
         {
@@ -267,24 +343,19 @@ static void updateQueueMenu()
         }
 
         // The queue may have shrunk on a mid-queue failure: re-clamp the view
-        size_t size = getListSize(titleQueue);
-        if(size == 0)
+        if(getListSize(titleQueue) == 0)
         {
             uiSetResult(0);
             uiPop();
             return;
         }
 
-        mov = size >= MAX_ENTRIES;
-        if(pos >= size)
-            pos = 0;
-        if(cursor + pos >= size)
-            cursor = size - pos - 1;
+        clampQueueView();
     }
 
-    if(vpad.trigger & VPAD_BUTTON_MINUS)
+    // The entry the download manager works on cannot be removed.
+    if(vpad.trigger & VPAD_BUTTON_MINUS && removeFromQueue(cursor + pos))
     {
-        removeFromQueue(cursor + pos);
         if(getListSize(titleQueue) == 0)
         {
             uiSetResult(0);
@@ -309,7 +380,7 @@ static void updateQueueMenu()
 
 static const UIScreen queueScreen = {
     .name = "queue",
-    .buttons = VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS,
+    .buttons = VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS | VPAD_BUTTON_X,
     .enter = enterQueueMenu,
     .update = updateQueueMenu,
     .render = renderQueueMenu,
@@ -318,4 +389,132 @@ static const UIScreen queueScreen = {
 bool queueMenu()
 {
     return uiModal(&queueScreen, NULL);
+}
+
+// The progress screen of the download manager: the frame the queue thread
+// would have drawn (see engineFrames.h) with a footer of its own.
+static void *cancelOverlay;
+// The breadcrumb of the queue thread, shown as the overlay it would have
+// been on the main thread.
+static void *statusOverlay;
+static char statusText[256];
+
+static void hideStatusOverlay()
+{
+    if(statusOverlay != NULL)
+    {
+        uiHideOverlay(statusOverlay);
+        statusOverlay = NULL;
+    }
+}
+
+static void hideCancelOverlay()
+{
+    if(cancelOverlay != NULL)
+    {
+        uiHideOverlay(cancelOverlay);
+        cancelOverlay = NULL;
+    }
+}
+
+static void enterProgressMenu(void *param)
+{
+    (void)param;
+    cancelOverlay = NULL;
+    statusOverlay = NULL;
+    statusText[0] = '\0';
+    reserveScreenLogLines(2);
+}
+
+static void leaveProgressMenu()
+{
+    hideCancelOverlay();
+    hideStatusOverlay();
+    reserveScreenLogLines(0);
+}
+
+static void renderProgressMenu()
+{
+    drawEngineFrame();
+
+    char toScreen[256];
+    strcpy(toScreen, localise("Press " BUTTON_B " to return"));
+    strcat(toScreen, " || ");
+    strcat(toScreen, localise(BUTTON_X " to cancel the downloads"));
+    lineToFrame(MAX_LINES - 2, SCREEN_COLOR_WHITE);
+    textToFrame(MAX_LINES - 1, ALIGNED_CENTER, toScreen);
+}
+
+static void updateProgressMenu()
+{
+    // Finished, failed or cancelled: whatever it had to say is said.
+    if(!queueRunning())
+    {
+        uiPop();
+        return;
+    }
+
+    // The bars glide every frame, just like they do in the foreground.
+    uiInvalidate();
+
+    char text[sizeof(statusText)];
+    if(getEngineStatus(text, sizeof(text)))
+    {
+        if(statusOverlay == NULL || strcmp(text, statusText) != 0)
+        {
+            hideStatusOverlay();
+            strcpy(statusText, text);
+            statusOverlay = uiShowOverlay(statusText);
+        }
+    }
+    else
+        hideStatusOverlay();
+
+    if(cancelOverlay == NULL)
+    {
+        if(vpad.trigger & VPAD_BUTTON_B)
+            uiPop();
+        else if(vpad.trigger & VPAD_BUTTON_X)
+        {
+            char toScreen[256];
+            strcpy(toScreen, localise("Do you really want to cancel?"));
+            strcat(toScreen, "\n\n" BUTTON_A " ");
+            strcat(toScreen, localise("Yes"));
+            strcat(toScreen, " || " BUTTON_B " ");
+            strcat(toScreen, localise("No"));
+            cancelOverlay = uiShowOverlay(toScreen);
+        }
+    }
+    else if(vpad.trigger & VPAD_BUTTON_A)
+    {
+        hideCancelOverlay();
+        cancelQueue();
+    }
+    else if(vpad.trigger & VPAD_BUTTON_B)
+        hideCancelOverlay();
+}
+
+static const UIScreen progressScreen = {
+    .name = "download manager",
+    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B | VPAD_BUTTON_X,
+    .enter = enterProgressMenu,
+    .update = updateProgressMenu,
+    .render = renderProgressMenu,
+    .leave = leaveProgressMenu,
+};
+
+void queueProgressMenu()
+{
+    if(queueRunning())
+        uiModal(&progressScreen, NULL);
+}
+
+void downloadManagerMenu()
+{
+    if(queueRunning())
+        queueProgressMenu();
+    else if(getListSize(getTitleQueue()) != 0)
+        queueMenu();
+    else
+        showErrorFrame(localise("The queue is empty"));
 }

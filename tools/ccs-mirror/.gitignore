@@ -1,0 +1,5 @@
+# Output of SSSL: certificates and private keys, never commit them.
+*.pem
+*.der
+*.csr
+__pycache__/

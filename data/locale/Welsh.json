@@ -195,5 +195,32 @@
     "unknown": "anhysbys",
     "Yes": "Ie",
     "No": "Na",
-    "File": "Ffeil"
+    "File": "Ffeil",
+
+    "\uE002 to download in the background": "Pwyswch \uE002 i lawrlwytho yn y cefndir",
+    "\uE045 to show the progress": "Pwyswch \uE045 i ddangos y cynnydd",
+    "\uE045 to add to the download manager": "Pwyswch \uE045 i ychwanegu at y rheolwr lawrlwytho",
+    "Download manager": "Rheolwr lawrlwytho",
+    "Wait for the download manager to finish first.": "Arhoswch i'r rheolwr lawrlwytho orffen yn gyntaf.",
+    "The queue is empty": "Mae'r ciw yn wag",
+    "\uE002 to cancel the downloads": "Pwyswch \uE002 i ganslo'r lawrlwythiadau",
+
+    "\uE002 Download Management": "Pwyswch \uE002 Rheoli Lawrlwythiadau",
+    "Added to the Wii U Download Management!": "Wedi'i ychwanegu at Reoli Lawrlwythiadau'r Wii U!",
+    "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "Does dim tocyn ar gyfer y teitl hwn ar y consol,\nfelly mae'n debyg na fydd Rheoli Lawrlwythiadau'r Wii U yn gallu ei osod.\n\nEi ychwanegu beth bynnag?",
+    "The Wii U Download Management refused the title.": "Gwrthododd Rheoli Lawrlwythiadau'r Wii U y teitl.",
+    "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?": "Arbrofol: mae Rheoli Lawrlwythiadau'r Wii U yn lawrlwytho ac yn gosod\ny teitl hwn ei hun, os oes gan weinyddion Nintendo ei holl ddata o hyd.\n\nParhau?",
+    "It is already in the Download Management.\nClear it there first.": "Mae eisoes yn Rheoli Lawrlwythiadau.\nCliriwch ef yno yn gyntaf.",
+    "It is already installed.": "Mae eisoes wedi'i osod.",
+    "A file of this title is no longer on the servers of Nintendo.": "Nid yw un o ffeiliau'r teitl hwn ar weinyddion Nintendo mwyach.",
+    "The icon of this title is no longer on the servers of Nintendo.": "Nid yw eicon y teitl hwn ar weinyddion Nintendo mwyach.",
+    "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?": "Mae eisoes yn Rheoli Lawrlwythiadau.\nEi dynnu oddi yno, gyda'r hyn a lawrlwythwyd hyd yma?",
+    "Removed from the Wii U Download Management!": "Wedi'i dynnu o Reoli Lawrlwythiadau'r Wii U!",
+    "Backing up the ticket store to the SD card failed.": "Methwyd gwneud copi wrth gefn o'r storfa docynnau i'r cerdyn SD.",
+    "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nAdd the free ticket from the servers of Nintendo to the console?\nThe ticket store is backed up to the SD card first.": "Nid oes tocyn ar gyfer y diweddariad hwn ar y consol, felly byddai Rheoli\nLawrlwythiadau'r Wii U yn ei lawrlwytho ond yn methu ei osod.\n\nYchwanegu'r tocyn am ddim o weinyddion Nintendo at y consol?\nMae copi wrth gefn o'r storfa docynnau yn cael ei wneud ar y cerdyn SD yn gyntaf.",
+    "The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt": "Nid yw storfa docynnau'r consol hwn wedi'i threfnu yn ôl y disgwyl,\nfelly ni newidiwyd dim. Gweler SD:/NUSspli-tickets.txt",
+    "The servers of Nintendo have no ticket for this update.": "Nid oes gan weinyddion Nintendo docyn ar gyfer y diweddariad hwn.",
+    "The ticket from the servers of Nintendo is not the public ticket of this update.": "Nid tocyn cyhoeddus y diweddariad hwn yw'r tocyn o weinyddion Nintendo.",
+    "Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/": "Methwyd ychwanegu'r tocyn. Mae copi wrth gefn y storfa docynnau\nar y cerdyn SD: SD:/NUSspli/ticket-backup/",
+    "Wii U Download Management": "Rheoli Lawrlwythiadau'r Wii U"
 }

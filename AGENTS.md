@@ -134,9 +134,20 @@ docker run --rm -v ${PWD}:/src xianpengshen/clang-tools:22 \
   English needs no file. Other languages load `data/locale/<Name>.json` at
   runtime. When you add a user visible string, add its key to
   `meta/baselocale.json` **and** to every `data/locale/*.json`.
-- Threads (`include/thread.h`): downloader on CPU 0, I/O thread on CPU 2,
-  socket pool on CPU 1/2, UI on the main thread. Priorities and stack sizes are
-  defined there - respect them instead of inventing new values.
+- Threads (`include/thread.h`): downloader and the queue thread of the
+  download manager on CPU 0, I/O thread on CPU 2, socket pool on CPU 1/2, UI on
+  the main thread. Priorities and stack sizes are defined there - respect them
+  instead of inventing new values.
+- The download manager (`startQueueInBackground()` in `include/queue.h`) runs
+  the queue on a thread of its own, so engine code (downloader, installer,
+  ticket and I/O code) must not assume it runs on the main thread. It reaches
+  the UI through `include/ui.h` only: there `uiModal()` and the dialogs of
+  `menuUtils.c` / `engineFrames.c` are handed to the main thread
+  (`uiCallOnMain()`), `uiPump()` frames become the snapshot the progress
+  screen draws, and `AppRunning(true)` only observes. A dialog that keeps its
+  state in statics routes itself through `uiCallOnMain()` like
+  `showErrorDialog()` does. Shared lists and buffers (the queue, the screen
+  log, the I/O queue) are locked; take the lock where you walk them.
 - Config is stored as `sd:/NUSspli.txt` (`CONFIG_PATH` in `include/config.h`).
 
 ## Git rules

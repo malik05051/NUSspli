@@ -258,7 +258,19 @@ void showMcpProgress(McpData *data, const char *game, bool inst)
             uiPump(NULL, NULL);
         }
 
-        if(inst)
+        if(inst && !isMainThread())
+        {
+            // The queue thread of the download manager reads no buttons:
+            // its install is cancelled from the progress screen.
+            if(backgroundCancelled())
+            {
+                inst = false;
+                showStatusFrame(localise("Cancelling installation."), localise("Please wait..."), false, 2);
+                MCP_InstallTitleAbort(mcpHandle);
+                data->err = CUSTOM_MCP_ERROR_CANCELLED;
+            }
+        }
+        else if(inst)
         {
             if(ovl == NULL)
             {

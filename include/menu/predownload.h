@@ -30,6 +30,10 @@ extern "C"
 #endif
 
     bool predownloadMenu(const TitleEntry *entry, NUSDEV forcedInstDev);
+    // Read only: what the Wii U Download Management holds, on screen and in
+    // SYSTEM_DOWNLOADS_PATH on the SD card.
+#define SYSTEM_DOWNLOADS_PATH NUSDIR_SD "NUSspli-downloads.txt"
+    void systemDownloadsInfo();
 
 #ifdef __cplusplus
 }

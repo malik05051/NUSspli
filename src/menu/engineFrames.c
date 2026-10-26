@@ -29,8 +29,14 @@
 #include <menu/engineFrames.h>
 #include <menu/utils.h>
 #include <renderer.h>
+#include <state.h>
+#include <thread.h>
 #include <ui.h>
 #include <utils.h>
+
+#pragma GCC diagnostic ignored "-Wundef"
+#include <coreinit/memory.h>
+#pragma GCC diagnostic pop
 
 // The bars chase their target instead of jumping with every sample. A
 // finished bar snaps so the last frame of a download cannot be left
@@ -52,7 +58,9 @@ static float glideBar(UiAnim *anim, float target)
     return uiAnimStep(anim, 2.0f);
 }
 
-void showStatusFrame(const char *line0, const char *line1, bool bar, int logLine)
+static void publishStatusFrame(const char *line0, const char *line1, bool bar, int logLine);
+
+static void fillStatusFrame(const char *line0, const char *line1, bool bar, int logLine)
 {
     startNewFrame();
     textToFrame(0, 0, line0);
@@ -62,6 +70,17 @@ void showStatusFrame(const char *line0, const char *line1, bool bar, int logLine
         textToFrame(1, bar ? 41 : 0, line1);
     if(logLine >= 0)
         writeScreenLog(logLine);
+}
+
+void showStatusFrame(const char *line0, const char *line1, bool bar, int logLine)
+{
+    if(!isMainThread())
+    {
+        publishStatusFrame(line0, line1, bar, logLine);
+        return;
+    }
+
+    fillStatusFrame(line0, line1, bar, logLine);
     drawFrame();
     readInput();
 }
@@ -188,6 +207,244 @@ void drawDownloadProgressFrame(void *ctx)
     writeScreenLog(++line);
 }
 
+typedef enum
+{
+    ENGINE_FRAME_NONE,
+    ENGINE_FRAME_STATUS,
+    ENGINE_FRAME_DOWNLOAD,
+    ENGINE_FRAME_MCP,
+} ENGINE_FRAME;
+
+// A frame of the queue thread with everything it points to copied in: the
+// views point into the stack of the thread, which moves on while the
+// progress screen draws.
+typedef struct
+{
+    ENGINE_FRAME type;
+
+    // ENGINE_FRAME_STATUS
+    char line0[FS_MAX_PATH + 256];
+    char line1[256];
+    bool bar;
+    int logLine;
+
+    // ENGINE_FRAME_DOWNLOAD
+    DLProgressView dl;
+    downloadData data;
+    QUEUE_DATA queueData;
+    bool hasData;
+    bool hasQueueData;
+    char dlName[FS_MAX_PATH];
+    char dataName[FS_MAX_PATH];
+
+    // ENGINE_FRAME_MCP
+    McpProgressView mcp;
+    char game[FS_MAX_PATH];
+    char speed[32];
+} EngineFrame;
+
+static spinlock engineLock = SPINLOCK_FREE;
+// Written by the queue thread.
+static EngineFrame published;
+// The copy the progress screen draws. It keeps the animation state (bars,
+// estimates) of the main thread, which the snapshot knows nothing about.
+static EngineFrame shown;
+static char engineStatus[256];
+
+static void copyString(char *dst, const char *src, size_t size)
+{
+    snprintf(dst, size, "%s", src == NULL ? "" : src);
+}
+
+void resetEngineFrames()
+{
+    spinLock(engineLock);
+    published.type = ENGINE_FRAME_NONE;
+    engineStatus[0] = '\0';
+    spinReleaseLock(engineLock);
+
+    OSBlockSet(&shown, 0, sizeof(shown));
+    shown.dl.fileEta = UINT32_MAX;
+    shown.data.eta = UINT32_MAX;
+    shown.queueData.eta = UINT32_MAX;
+}
+
+static void publishStatusFrame(const char *line0, const char *line1, bool bar, int logLine)
+{
+    spinLock(engineLock);
+    published.type = ENGINE_FRAME_STATUS;
+    copyString(published.line0, line0, sizeof(published.line0));
+    copyString(published.line1, line1, sizeof(published.line1));
+    published.bar = bar;
+    published.logLine = logLine;
+    spinReleaseLock(engineLock);
+}
+
+void publishEngineFrame(UiWaitFrame frame, void *ctx)
+{
+    if(frame == drawDownloadProgressFrame)
+    {
+        DLProgressView *view = (DLProgressView *)ctx;
+        spinLock(engineLock);
+        published.type = ENGINE_FRAME_DOWNLOAD;
+        published.dl = *view;
+        copyString(published.dlName, view->name, sizeof(published.dlName));
+        published.hasData = view->data != NULL;
+        if(published.hasData)
+        {
+            published.data = *view->data;
+            copyString(published.dataName, view->data->name, sizeof(published.dataName));
+        }
+        published.hasQueueData = view->queueData != NULL;
+        if(published.hasQueueData)
+            published.queueData = *view->queueData;
+        spinReleaseLock(engineLock);
+    }
+    else if(frame == drawMcpProgressFrame)
+    {
+        McpProgressView *view = (McpProgressView *)ctx;
+        spinLock(engineLock);
+        published.type = ENGINE_FRAME_MCP;
+        published.mcp = *view;
+        copyString(published.game, view->game, sizeof(published.game));
+        copyString(published.speed, view->speed, sizeof(published.speed));
+        spinReleaseLock(engineLock);
+    }
+}
+
+void publishEngineStatus(const char *text)
+{
+    spinLock(engineLock);
+    copyString(engineStatus, text, sizeof(engineStatus));
+    spinReleaseLock(engineLock);
+}
+
+void drawEngineFrame()
+{
+    spinLock(engineLock);
+    ENGINE_FRAME type = published.type;
+    switch(type)
+    {
+        case ENGINE_FRAME_STATUS:
+            OSBlockMove(shown.line0, published.line0, sizeof(shown.line0), false);
+            OSBlockMove(shown.line1, published.line1, sizeof(shown.line1), false);
+            shown.bar = published.bar;
+            shown.logLine = published.logLine;
+            break;
+        case ENGINE_FRAME_DOWNLOAD:
+        {
+            // The estimates are computed while drawing, so they live here
+            // and only start over with the file or the title they belong to.
+            uint32_t fileEta = strcmp(shown.dlName, published.dlName) == 0 ? shown.dl.fileEta : UINT32_MAX;
+            uint32_t titleEta = strcmp(shown.dataName, published.dataName) == 0 ? shown.data.eta : UINT32_MAX;
+            uint32_t queueEta = shown.queueData.eta;
+            UiAnim bars[3];
+            OSBlockMove(bars, shown.dl.bars, sizeof(bars), false);
+
+            shown.dl = published.dl;
+            shown.data = published.data;
+            shown.queueData = published.queueData;
+            shown.hasData = published.hasData;
+            shown.hasQueueData = published.hasQueueData;
+            OSBlockMove(shown.dlName, published.dlName, sizeof(shown.dlName), false);
+            OSBlockMove(shown.dataName, published.dataName, sizeof(shown.dataName), false);
+
+            OSBlockMove(shown.dl.bars, bars, sizeof(bars), false);
+            shown.dl.fileEta = fileEta;
+            shown.data.eta = titleEta;
+            shown.queueData.eta = queueEta;
+            shown.dl.name = shown.dlName;
+            shown.data.name = shown.dataName;
+            shown.dl.data = shown.hasData ? &shown.data : NULL;
+            shown.dl.queueData = shown.hasQueueData ? &shown.queueData : NULL;
+            break;
+        }
+        case ENGINE_FRAME_MCP:
+        {
+            UiAnim bar = shown.mcp.bar;
+            shown.mcp = published.mcp;
+            shown.mcp.bar = bar;
+            OSBlockMove(shown.game, published.game, sizeof(shown.game), false);
+            OSBlockMove(shown.speed, published.speed, sizeof(shown.speed), false);
+            shown.mcp.game = shown.game;
+            shown.mcp.speed = shown.speed;
+            break;
+        }
+        case ENGINE_FRAME_NONE:
+            break;
+    }
+    spinReleaseLock(engineLock);
+
+    switch(type)
+    {
+        case ENGINE_FRAME_STATUS:
+            fillStatusFrame(shown.line0, shown.line1[0] == '\0' ? NULL : shown.line1, shown.bar, shown.logLine);
+            break;
+        case ENGINE_FRAME_DOWNLOAD:
+            drawDownloadProgressFrame(&shown.dl);
+            break;
+        case ENGINE_FRAME_MCP:
+            drawMcpProgressFrame(&shown.mcp);
+            break;
+        case ENGINE_FRAME_NONE:
+            fillStatusFrame(localise("Preparing. This might take some time. Please be patient."), NULL, false, 2);
+            break;
+    }
+}
+
+static uint32_t percent(uint64_t now, uint64_t total)
+{
+    if(total == 0)
+        return 0;
+
+    if(now > total)
+        now = total;
+
+    return (uint32_t)(now * 100 / total);
+}
+
+void getEngineSummary(char *out, size_t size)
+{
+    spinLock(engineLock);
+    switch(published.type)
+    {
+        case ENGINE_FRAME_STATUS:
+            copyString(out, published.line0, size);
+            break;
+        case ENGINE_FRAME_DOWNLOAD:
+        {
+            const char *name = published.hasData ? published.dataName : published.dlName;
+            if(published.hasQueueData)
+            {
+                const QUEUE_DATA *q = &published.queueData;
+                snprintf(out, size, "%s %s (%u/%u) %u%%", localise("Downloading"), name, (unsigned int)q->current, (unsigned int)q->packages, (unsigned int)percent(q->downloaded + published.dl.dlnow, q->dlSize));
+            }
+            else if(published.hasData)
+                snprintf(out, size, "%s %s %u%%", localise("Downloading"), name, (unsigned int)percent(published.data.dlnow + published.dl.dlnow, published.data.dltotal));
+            else
+                snprintf(out, size, "%s %s", localise("Downloading"), name);
+            break;
+        }
+        case ENGINE_FRAME_MCP:
+            snprintf(out, size, "%s %s %u%%", localise(published.mcp.inst ? "Installing" : "Uninstalling"), published.game, (unsigned int)percent(published.mcp.sizeProgress, published.mcp.sizeTotal));
+            break;
+        case ENGINE_FRAME_NONE:
+            copyString(out, localise("Preparing"), size);
+            break;
+    }
+    spinReleaseLock(engineLock);
+}
+
+bool getEngineStatus(char *out, size_t size)
+{
+    spinLock(engineLock);
+    bool ret = engineStatus[0] != '\0';
+    if(ret)
+        copyString(out, engineStatus, size);
+    spinReleaseLock(engineLock);
+    return ret;
+}
+
 static char networkRetryText[512];
 static char *networkRetryDigit;
 static int networkRetryFrames;
@@ -243,8 +500,18 @@ static const UIScreen networkRetryDialog = {
     .render = renderNetworkRetry,
 };
 
+static int networkErrorOnMain(void *arg)
+{
+    return showNetworkError((const char *)arg);
+}
+
 bool showNetworkError(const char *err)
 {
+    // The dialog state above belongs to the main thread, see
+    // showErrorDialog.
+    if(!isMainThread())
+        return uiCallOnMain(networkErrorOnMain, (void *)err) != 0;
+
     networkRetryDigit = NULL;
     networkRetryAutoResume = autoResumeEnabled();
     networkRetryFrames = 9 * FRAMERATE; // 9 seconds

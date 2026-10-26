@@ -41,6 +41,8 @@
 #include <tmd.h>
 #include <utils.h>
 
+#include <mbedtls/sha1.h>
+
 #pragma GCC diagnostic ignored "-Wundef"
 #include <coreinit/memdefaultheap.h>
 #include <coreinit/memory.h>
@@ -485,6 +487,277 @@ exit:
     t = OSGetTime() - t;
     addEntropy(&t, sizeof(OSTime));
     destroyList(ticketList, true);
+}
+
+bool hasTicket(uint64_t tid)
+{
+    char path[FS_MAX_PATH];
+    OSBlockMove(path, TICKET_BUCKET, sizeof(TICKET_BUCKET), false);
+    char *inSentence = path + (sizeof(TICKET_BUCKET) - 1);
+
+    FSADirectoryHandle dir;
+    if(FSAOpenDir(getFSAClient(), path, &dir) != FS_ERROR_OK)
+        return false;
+
+    // The same walk as deleteTicket(): folders of four characters, files of
+    // twelve, every file a row of tickets.
+    bool found = false;
+    FSADirectoryEntry entry;
+    FSADirectoryHandle dir2;
+    while(!found && FSAReadDir(getFSAClient(), dir, &entry) == FS_ERROR_OK)
+    {
+        if(!(entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 4)
+            continue;
+
+        strcpy(inSentence, entry.name);
+        if(FSAOpenDir(getFSAClient(), path, &dir2) != FS_ERROR_OK)
+            continue;
+
+        strcat(inSentence, "/");
+        char *fileName = inSentence + strlen(inSentence);
+        while(!found && FSAReadDir(getFSAClient(), dir2, &entry) == FS_ERROR_OK)
+        {
+            if((entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 12)
+                continue;
+
+            strcpy(fileName, entry.name);
+            void *file;
+            size_t fileSize = readFile(path, &file);
+            if(file == NULL)
+                continue;
+
+            uint8_t *fileEnd = ((uint8_t *)file) + fileSize;
+            TICKET *ticket = (TICKET *)file;
+            while(((uint8_t *)ticket) + sizeof(TICKET) <= fileEnd)
+            {
+                if(ticket->tid == tid)
+                {
+                    found = true;
+                    break;
+                }
+
+                uint8_t *ptr = ((uint8_t *)ticket) + sizeof(TICKET);
+                if(ticket->total_hdr_size > 0x14)
+                    ptr += ticket->total_hdr_size - 0x14;
+
+                ticket = (TICKET *)ptr;
+            }
+
+            MEMFreeToDefaultHeap(file);
+        }
+
+        FSACloseDir(getFSAClient(), dir2);
+    }
+
+    FSACloseDir(getFSAClient(), dir);
+    return found;
+}
+
+// The file a ticket belongs in follows from the SHA-1 hash of its title ID
+// (big endian, as in the ticket): the low nibble of byte 2 is the folder, the
+// low five bits of byte 3 the file. This is not documented anywhere, it was
+// read from the store of a 5.5.5E console, where all of its 95 title IDs sat
+// in exactly that file. dumpTicketStore() checks it again on every console
+// before addUpdateTicket() relies on it.
+static void ticketPath(uint64_t tid, char *path, size_t size)
+{
+    uint8_t hash[20];
+    mbedtls_sha1((const unsigned char *)&tid, sizeof(tid), hash);
+    snprintf(path, size, TICKET_BUCKET "%04x/%08x.tik", hash[2] & 0x0F, hash[3] & 0x1F);
+}
+
+// The backup of the whole store and a list of where every ticket of it sits,
+// taken before addUpdateTicket() changes anything. It reads the store the way
+// deleteTicket() does and writes to the SD card only.
+#define TICKET_LIST_SIZE (256 * 1024)
+
+static void writeSdFile(const char *path, const void *data, size_t size)
+{
+    FSAFileHandle fh = openFile(path, "w", 0);
+    if(fh == 0)
+        return;
+
+    if(size != 0)
+        addToIOQueue(data, 1, size, fh);
+
+    addToIOQueue(NULL, 0, 0, fh);
+}
+
+int dumpTicketStore(int *files, int *misplaced)
+{
+    char *list = MEMAllocFromDefaultHeap(TICKET_LIST_SIZE);
+    if(list == NULL)
+        return -1;
+
+    size_t used = 0;
+    int tickets = 0;
+    *files = 0;
+    *misplaced = 0;
+
+    char path[FS_MAX_PATH];
+    char backup[FS_MAX_PATH];
+    char expected[FS_MAX_PATH];
+    OSBlockMove(path, TICKET_BUCKET, sizeof(TICKET_BUCKET), false);
+    char *inSentence = path + (sizeof(TICKET_BUCKET) - 1);
+
+    FSADirectoryHandle dir;
+    FSError err = FSAOpenDir(getFSAClient(), path, &dir);
+    if(err != FS_ERROR_OK)
+    {
+        used += snprintf(list + used, TICKET_LIST_SIZE - used, "Error opening %s: %s\n", path, translateFSErr(err));
+        goto write;
+    }
+
+    FSADirectoryEntry entry;
+    FSADirectoryHandle dir2;
+    while(FSAReadDir(getFSAClient(), dir, &entry) == FS_ERROR_OK)
+    {
+        if(!(entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 4)
+            continue;
+
+        strcpy(inSentence, entry.name);
+        if(FSAOpenDir(getFSAClient(), path, &dir2) != FS_ERROR_OK)
+            continue;
+
+        snprintf(backup, sizeof(backup), TICKET_BACKUP_DIR "%s", entry.name);
+        createDirRecursive(backup);
+
+        strcat(inSentence, "/");
+        char *fileName = inSentence + strlen(inSentence);
+        while(FSAReadDir(getFSAClient(), dir2, &entry) == FS_ERROR_OK)
+        {
+            // Directories are skipped by their flag, see deleteTicket().
+            if((entry.info.flags & FS_STAT_DIRECTORY) || strlen(entry.name) != 12)
+                continue;
+
+            strcpy(fileName, entry.name);
+            void *file;
+            size_t fileSize = readFile(path, &file);
+            if(file == NULL)
+                continue;
+
+            ++*files;
+            snprintf(backup, sizeof(backup), TICKET_BACKUP_DIR "%s", inSentence);
+            writeSdFile(backup, file, fileSize);
+
+            if(used < TICKET_LIST_SIZE)
+                used += snprintf(list + used, TICKET_LIST_SIZE - used, "%s (%u bytes)\n", inSentence, (unsigned int)fileSize);
+
+            uint8_t *fileEnd = ((uint8_t *)file) + fileSize;
+            TICKET *ticket = (TICKET *)file;
+            while(((uint8_t *)ticket) + sizeof(TICKET) <= fileEnd)
+            {
+                uint8_t *ptr = ((uint8_t *)ticket) + sizeof(TICKET);
+                if(ticket->total_hdr_size > 0x14)
+                    ptr += ticket->total_hdr_size - 0x14;
+
+                if(used < TICKET_LIST_SIZE)
+                    used += snprintf(list + used, TICKET_LIST_SIZE - used, "  +0x%04X size %u title %016llX ticket %016llX version %u\n",
+                        (unsigned int)(((uint8_t *)ticket) - ((uint8_t *)file)), (unsigned int)(ptr - (uint8_t *)ticket), ticket->tid, ticket->ticket_id, ticket->title_version);
+
+                ticketPath(ticket->tid, expected, sizeof(expected));
+                if(strcmp(path, expected) != 0)
+                {
+                    ++*misplaced;
+                    if(used < TICKET_LIST_SIZE)
+                        used += snprintf(list + used, TICKET_LIST_SIZE - used, "    not in the expected file %s\n", expected + (sizeof(TICKET_BUCKET) - 1));
+                }
+
+                ++tickets;
+                if(ptr >= fileEnd)
+                    break;
+
+                ticket = (TICKET *)ptr;
+            }
+
+            MEMFreeToDefaultHeap(file);
+        }
+
+        FSACloseDir(getFSAClient(), dir2);
+    }
+
+    FSACloseDir(getFSAClient(), dir);
+
+write:
+    if(used > TICKET_LIST_SIZE)
+        used = TICKET_LIST_SIZE;
+
+    writeSdFile(TICKET_LIST_PATH, list, used);
+    flushIOQueue();
+    MEMFreeToDefaultHeap(list);
+    return checkForQueueErrors() ? -1 : tickets;
+}
+
+// An update has a ticket anyone can download from the CDN, the one NUSspli
+// installs updates with. Without it on the console, the Wii U Download
+// Management downloads an update and then fails to install it (105-3683),
+// and nn::nim::DownloadPatchTitleTicket did not add it on a 5.5.5E console.
+//
+// Only that public ticket is added, and only as it comes from the server:
+// signed by Nintendo, for no console and no account in particular. The
+// console checks the signature itself when it uses the ticket. The bytes are
+// appended to the file the ticket belongs in, the tickets in there already
+// stay as they are, and deleteTicket() takes it out again.
+#define TICKET_ISSUER "Root-CA00000003-XS0000000c"
+
+ADD_TICKET_RESULT addUpdateTicket(uint64_t tid)
+{
+    if(!isUpdate(tid) || hasTicket(tid))
+        return ADD_TICKET_INVALID;
+
+    RAMBUF *rambuf = allocRamBuf();
+    if(rambuf == NULL)
+        return ADD_TICKET_WRITE_FAILED;
+
+    char path[FS_MAX_PATH];
+    snprintf(path, sizeof(path), DOWNLOAD_URL "%016llx/cetk", tid);
+    if(downloadFile(path, "title.tik", NULL, FILE_TYPE_TIK | FILE_TYPE_TORAM, false, NULL, rambuf) != 0)
+    {
+        freeRamBuf(rambuf);
+        return ADD_TICKET_NOT_ON_SERVER;
+    }
+
+    // A cetk is the ticket followed by the certificates, only the ticket goes
+    // into the store. Its size is worked out like in deleteTicket().
+    const TICKET *ticket = (const TICKET *)rambuf->buf;
+    size_t size = sizeof(TICKET);
+    uint32_t sigType = 0;
+    if(rambuf->size >= sizeof(TICKET))
+    {
+        if(ticket->total_hdr_size > 0x14)
+            size += ticket->total_hdr_size - 0x14;
+
+        OSBlockMove(&sigType, rambuf->buf, sizeof(sigType), false);
+    }
+
+    if(rambuf->size < sizeof(TICKET) || size > rambuf->size || size > 0x1000 || sigType != 0x00010004 || // RSA-2048 with SHA-256
+        strncmp(ticket->issuer, TICKET_ISSUER, sizeof(ticket->issuer)) != 0 || ticket->tid != tid || ticket->device_id != 0 || ticket->account_id != 0)
+    {
+        freeRamBuf(rambuf);
+        return ADD_TICKET_INVALID;
+    }
+
+    ticketPath(tid, path, sizeof(path));
+    debugPrintf("Adding the ticket of %016llX to %s", tid, path);
+
+    // Only append: "a" creates the file when there is none and never touches
+    // the bytes already in it.
+    FSAFileHandle fh = openFile(path, "a", 0);
+    if(fh == 0)
+    {
+        freeRamBuf(rambuf);
+        return ADD_TICKET_WRITE_FAILED;
+    }
+
+    addToIOQueue(rambuf->buf, 1, size, fh);
+    addToIOQueue(NULL, 0, 0, fh);
+    flushIOQueue();
+    freeRamBuf(rambuf);
+
+    if(checkForQueueErrors() || !hasTicket(tid))
+        return ADD_TICKET_WRITE_FAILED;
+
+    return ADD_TICKET_OK;
 }
 
 bool hasMagicHeader(const TICKET *ticket)

@@ -30,11 +30,15 @@
 #include <downloader.h>
 #include <filesystem.h>
 #include <input.h>
+#include <ioQueue.h>
+#include <menu/engineFrames.h>
 #include <menu/predownload.h>
 #include <menu/utils.h>
+#include <nim.h>
 #include <queue.h>
 #include <renderer.h>
 #include <state.h>
+#include <ticket.h>
 #include <titles.h>
 #include <tmd.h>
 #include <ui.h>
@@ -154,7 +158,11 @@ static void renderPDMenu()
 
     strcpy(toFrame, localise("Press " BUTTON_B " to return"));
     strcat(toFrame, " || ");
-    strcat(toFrame, localise(BUTTON_PLUS " to start"));
+    strcat(toFrame, localise(queueRunning() ? BUTTON_PLUS " to add to the download manager" : BUTTON_PLUS " to start"));
+    // Here and not behind the queue hint: that line is the long one, and
+    // translated it ran off both edges of the screen.
+    strcat(toFrame, " || ");
+    strcat(toFrame, localise(BUTTON_X " Download Management"));
     textToFrame(--line, ALIGNED_CENTER, toFrame);
 
     lineToFrame(--line, SCREEN_COLOR_WHITE);
@@ -532,6 +540,342 @@ static int pdAskAnswer(void *ovl)
     return ret;
 }
 
+// The calls into the system block for a while (the registration took
+// seconds in the tests), so a frame says so before they run.
+static void pdNimWait()
+{
+    showStatusFrame(localise("Please wait..."), NULL, false, -1);
+}
+
+// Closes NIM and shows why the system refused the title: the error code it
+// would show itself, with the reason in words for the codes the tests ran
+// into (the names are the ones WiiUBrew lists for them).
+static void pdNimRefused(NNResult res)
+{
+    int32_t code = nimErrorCode(res);
+    nimFinalize();
+    // A button pressed during the wait must not close the dialog below: a
+    // press is reported once, so reading it here takes it away from it.
+    readInput();
+
+    const char *reason = NULL;
+    if(code / 10000 == 105)
+    {
+        switch(code % 10000)
+        {
+            case 583: // TITLE_PACKAGE_ALREADY_REGISTERED
+                reason = "It is already in the Download Management.\nClear it there first.";
+                break;
+            case 601: // NEW_TITLE_ALREADY_EXISTS
+                reason = "It is already installed.";
+                break;
+            case 955: // BOSS_HTTP_ERROR_404_NOT_FOUND
+                reason = "A file of this title is no longer on the servers of Nintendo.";
+                break;
+            case 1017: // IDBE_FAILED_TO_DOWNLOAD
+                reason = "The icon of this title is no longer on the servers of Nintendo.";
+                break;
+        }
+    }
+
+    char txt[512];
+    if(code >= 1000000)
+        snprintf(txt, sizeof(txt), "%s\n\n%s%s%03d-%04d", localise("The Wii U Download Management refused the title."), reason == NULL ? "" : localise(reason), reason == NULL ? "" : "\n\n", (int)(code / 10000), (int)(code % 10000));
+    else // Not a code the system knows: the result as it is
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+
+    showErrorFrame(txt);
+}
+
+// A removal the system refused although the registration says the title
+// is there: shows the error code with the packages the system lists, the
+// title ID and the first bytes of the info block of each.
+#define PD_NIM_MAX_PACKAGES 6
+static void pdNimPackages(NNResult res)
+{
+    static uint64_t tids[PD_NIM_MAX_PACKAGES] __attribute__((__aligned__(0x40)));
+    static uint8_t infos[PD_NIM_MAX_PACKAGES][NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
+    uint32_t num = nimListPackages(tids, infos, PD_NIM_MAX_PACKAGES);
+    int32_t code = nimErrorCode(res);
+    nimFinalize();
+    readInput(); // see pdNimRefused()
+
+    char txt[1024];
+    int len = snprintf(txt, sizeof(txt), "%s\n\n%03d-%04d\n\nnn::nim packages: %u", localise("The Wii U Download Management refused the title."), (int)(code / 10000), (int)(code % 10000), (unsigned int)num);
+    for(uint32_t i = 0; i < num && len > 0 && (size_t)len < sizeof(txt); ++i)
+    {
+        len += snprintf(txt + len, sizeof(txt) - len, "\n%016llX:", tids[i]);
+        for(int j = 8; j < 0x18 && len > 0 && (size_t)len < sizeof(txt); ++j)
+            len += snprintf(txt + len, sizeof(txt) - len, " %02X", infos[i][j]);
+    }
+
+    showErrorFrame(txt);
+}
+
+// The Wii U Download Management opens to a blank screen while it holds some
+// of the packages NUSspli registered, and opens again once NUSspli removed
+// them. What it misses is not known, so this shows every package it holds
+// (the eShop's as well) with its whole info block: the config it was
+// registered with (0x00 to 0x17), the bytes (0x18 total, 0x20 downloaded),
+// the error (0x40) and the state (0x48). Comparing a package of NUSspli with
+// one of the eShop is how to find the difference. Nothing is changed.
+void systemDownloadsInfo()
+{
+    static uint64_t ids[NIM_MAX_PACKAGES] __attribute__((__aligned__(0x40)));
+    static uint8_t infos[NIM_MAX_PACKAGES][NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
+    static char dump[NIM_MAX_PACKAGES * 512];
+    char txt[1024];
+
+    pdNimWait();
+    NNResult res = nimInitialize();
+    if(NNResult_IsFailure(res))
+    {
+        readInput(); // see pdNimRefused()
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        showErrorFrame(txt);
+        return;
+    }
+
+    uint32_t num = nimListPackages(ids, infos, NIM_MAX_PACKAGES);
+    int len = snprintf(txt, sizeof(txt), "%s: %u\n", localise("Wii U Download Management"), (unsigned int)num);
+    int dumpLen = 0;
+    for(uint32_t i = 0; i < num; ++i)
+    {
+        uint64_t tid;
+        uint64_t total;
+        uint64_t done;
+        uint32_t version;
+        uint32_t error[2];
+        OSBlockMove(&tid, infos[i], sizeof(tid), false);
+        OSBlockMove(&version, infos[i] + 0x08, sizeof(version), false);
+        OSBlockMove(&total, infos[i] + 0x18, sizeof(total), false);
+        OSBlockMove(&done, infos[i] + 0x20, sizeof(done), false);
+        OSBlockMove(error, infos[i] + 0x40, sizeof(error), false);
+        int32_t code = error[0] == 0 && error[1] == 0 ? 0 : nimPackageErrorCode(infos[i]);
+
+        if(len > 0 && (size_t)len < sizeof(txt))
+            len += snprintf(txt + len, sizeof(txt) - len, "\n%016llX v%u: state %u, %llu / %llu KB, %03d-%04d\n  ",
+                tid, (unsigned int)version, infos[i][0x48], done >> 10, total >> 10, (int)(code / 10000), (int)(code % 10000));
+        for(int j = 0x0C; j < 0x18 && len > 0 && (size_t)len < sizeof(txt); ++j)
+            len += snprintf(txt + len, sizeof(txt) - len, " %02X", infos[i][j]);
+
+        if(dumpLen >= 0 && (size_t)dumpLen < sizeof(dump))
+            dumpLen += snprintf(dump + dumpLen, sizeof(dump) - dumpLen, "package %016llX: title %016llX state %u error %03d-%04d", ids[i], tid, infos[i][0x48], (int)(code / 10000), (int)(code % 10000));
+        for(int j = 0; j < NIM_PACKAGE_INFO_SIZE && dumpLen >= 0 && (size_t)dumpLen < sizeof(dump); ++j)
+            dumpLen += snprintf(dump + dumpLen, sizeof(dump) - dumpLen, j % 16 == 0 ? "\n  %02X" : " %02X", infos[i][j]);
+        if(dumpLen >= 0 && (size_t)dumpLen < sizeof(dump))
+            dumpLen += snprintf(dump + dumpLen, sizeof(dump) - dumpLen, "\n");
+    }
+
+    nimFinalize();
+
+    if(dumpLen < 0)
+        dumpLen = 0;
+    else if((size_t)dumpLen > sizeof(dump))
+        dumpLen = sizeof(dump);
+
+    FSAFileHandle fh = openFile(SYSTEM_DOWNLOADS_PATH, "w", 0);
+    if(fh != 0)
+    {
+        if(dumpLen != 0)
+            addToIOQueue(dump, 1, dumpLen, fh);
+        addToIOQueue(NULL, 0, 0, fh);
+        flushIOQueue();
+    }
+
+    if(len > 0 && (size_t)len < sizeof(txt))
+        snprintf(txt + len, sizeof(txt) - len, "\n\nSD:/NUSspli-downloads.txt");
+
+    readInput(); // see pdNimRefused()
+    showErrorFrame(txt);
+}
+
+// Hands the title to the Wii U Download Management instead of downloading
+// it here: the system downloads and installs it in the background and lists
+// it there, see nim.h. It installs with the ticket the console has, so a
+// game without one gets a warning first and an update fetches its own.
+static void pdSystemDownload()
+{
+    char txt[1024];
+
+    snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+        localise("Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?"),
+        localise("Yes"), localise("No"));
+    int ans = pdAskAnswer(uiShowOverlay(txt));
+    if(ans < 0)
+    {
+        pdFinish(0);
+        return;
+    }
+
+    if(ans == 0)
+        return; // back to the settings
+
+    const bool fetchTicket = isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid);
+    if(!isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid))
+    {
+        snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+            localise("There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?"),
+            localise("Yes"), localise("No"));
+        ans = pdAskAnswer(uiShowOverlay(txt));
+        if(ans < 0)
+        {
+            pdFinish(0);
+            return;
+        }
+
+        if(ans == 0)
+            return;
+    }
+
+    // An update without its ticket downloads, but does not install
+    // (105-3683): its public ticket goes into the ticket store first, after
+    // a backup of the store. A refusal below takes it out again.
+    bool addedTicket = false;
+    if(fetchTicket)
+    {
+        snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+            localise("There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nAdd the free ticket from the servers of Nintendo to the console?\nThe ticket store is backed up to the SD card first."),
+            localise("Yes"), localise("No"));
+        ans = pdAskAnswer(uiShowOverlay(txt));
+        if(ans < 0)
+        {
+            pdFinish(0);
+            return;
+        }
+
+        if(ans == 0)
+            return;
+
+        pdNimWait();
+        int files;
+        int misplaced;
+        const char *err = NULL;
+        if(dumpTicketStore(&files, &misplaced) < 0)
+            err = localise("Backing up the ticket store to the SD card failed.");
+        else if(misplaced != 0)
+            err = localise("The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt");
+        else
+        {
+            switch(addUpdateTicket(pdTmd->tid))
+            {
+                case ADD_TICKET_OK:
+                    addedTicket = true;
+                    addToScreenLog("Ticket of \"%s\" added to the ticket store", pdEntry->name);
+                    break;
+                case ADD_TICKET_NOT_ON_SERVER:
+                    err = localise("The servers of Nintendo have no ticket for this update.");
+                    break;
+                case ADD_TICKET_INVALID:
+                    err = localise("The ticket from the servers of Nintendo is not the public ticket of this update.");
+                    break;
+                default:
+                    err = localise("Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/");
+                    break;
+            }
+        }
+
+        if(err != NULL)
+        {
+            readInput(); // see pdNimRefused()
+            showErrorFrame(err);
+            return;
+        }
+    }
+
+    pdNimWait();
+    NNResult res = nimInitialize();
+    if(NNResult_IsFailure(res))
+    {
+        if(addedTicket)
+            deleteTicket(pdTmd->tid);
+
+        readInput();
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        showErrorFrame(txt);
+        return;
+    }
+
+    NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
+    nimMakeConfig(&config, pdTmd->tid, pdTmd->title_version);
+    res = nimRegister(&config, pdTmd->tid);
+    if(NNResult_IsFailure(res))
+    {
+        // A task that is there already can be taken out again. That is
+        // also the way out when it keeps the Download Management from
+        // opening.
+        if(nimErrorCode(res) == 1050583) // TITLE_PACKAGE_ALREADY_REGISTERED
+        {
+            readInput(); // see pdNimRefused()
+
+            // Where the task stands, as the system keeps it: the Download
+            // Management may not open to show it.
+            static uint8_t info[NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
+            uint64_t packageId;
+            if(nimFindPackage(pdTmd->tid, &packageId, info))
+            {
+                int32_t code = nimPackageErrorCode(info);
+                uint32_t words[2];
+                OSBlockMove(words, info + 0x40, sizeof(words), false);
+                int len = snprintf(txt, sizeof(txt), "nn::nim package %016llX\n\nstate (0x48): %u\nerror (0x40): %08X %08X -> %03d-%04d\n",
+                    packageId, info[0x48], (unsigned int)words[0], (unsigned int)words[1], (int)(code / 10000), (int)(code % 10000));
+                for(int i = 0; i < NIM_PACKAGE_INFO_SIZE && len > 0 && (size_t)len < sizeof(txt); ++i)
+                    len += snprintf(txt + len, sizeof(txt) - len, i % 16 == 0 ? "\n%02X" : " %02X", info[i]);
+
+                showErrorFrame(txt);
+            }
+            snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+                localise("It is already in the Download Management.\nRemove it from there, with what it downloaded so far?"),
+                localise("Yes"), localise("No"));
+            ans = pdAskAnswer(uiShowOverlay(txt));
+            if(ans != 1)
+            {
+                nimFinalize();
+                if(ans < 0)
+                    pdFinish(0);
+                return;
+            }
+
+            pdNimWait();
+            // The package has an ID of its own, the title ID is only how it
+            // is found. Without a package the title ID is the last try,
+            // its refusal shows the list.
+            if(!nimFindPackage(pdTmd->tid, &packageId, NULL))
+                packageId = pdTmd->tid;
+
+            res = nimUnregister(packageId);
+            if(NNResult_IsFailure(res))
+            {
+                // Registered by title ID but not found by it to remove:
+                // what does the Download Management hold?
+                pdNimPackages(res);
+                return;
+            }
+
+            nimFinalize();
+            readInput();
+            addToScreenLog("\"%s\" removed from the Wii U Download Management", pdEntry->name);
+            showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD_REMOVED);
+            return;
+        }
+
+        // Nothing of this title is in the Download Management, so its
+        // ticket goes again: the console is left as it was.
+        if(addedTicket)
+            deleteTicket(pdTmd->tid);
+
+        pdNimRefused(res);
+        return;
+    }
+
+    nimFinalize();
+    readInput(); // see pdNimRefused()
+
+    addToScreenLog("\"%s\" added to the Wii U Download Management", pdEntry->name);
+    showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD);
+    pdFinish(0);
+}
+
 // The code behind the original settings loop: the pre-selection dialogs,
 // the "preparing" frame and the download/queue itself. The labels keep the
 // original jump structure (runPost, downloadTMD, naNedNa; the old exitPDM
@@ -738,7 +1082,7 @@ runPost:
         if(ret)
         {
             pdRambuf = NULL;
-            if(pdAutoStartQueue)
+            if(pdAutoStartQueue && !queueRunning())
             {
                 disableApd();
                 ret = !proccessQueue();
@@ -836,8 +1180,21 @@ static void updatePDMenu()
                 cursorPos = PD_LINE_FOLDER_NAME;
         }
 
+        if(vpad.trigger & VPAD_BUTTON_X)
+        {
+            pdSystemDownload();
+            return;
+        }
+
         if(vpad.trigger & VPAD_BUTTON_PLUS)
+        {
+            // Nothing downloads next to the download manager: the title
+            // joins its queue instead and starts in turn.
+            if(queueRunning())
+                pdToQueue = true;
+
             pdMenuActive = false;
+        }
         else if(vpad.trigger & VPAD_BUTTON_MINUS)
         {
             pdToQueue = true;
@@ -845,7 +1202,7 @@ static void updatePDMenu()
         }
         else
         {
-            if(pdInstalled && vpad.trigger & VPAD_BUTTON_Y)
+            if(pdInstalled && vpad.trigger & VPAD_BUTTON_Y && !downloadManagerBusy())
             {
                 if(checkSystemTitleFromListType(&pdTitleList, true))
                 {
@@ -877,7 +1234,7 @@ static void updatePDMenu()
 
 static const UIScreen pdScreen = {
     .name = "predownload",
-    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS | VPAD_BUTTON_Y,
+    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS | VPAD_BUTTON_X | VPAD_BUTTON_Y,
     .update = updatePDMenu,
     .render = renderPDMenu,
 };

@@ -53,6 +53,9 @@ static bool launching = false;
 // Noted by the callback, taken over by uiDrainEvents(). Volatile because we do
 // not know which thread the callback runs on, unlike app whose readers are known.
 static volatile bool homePressed = false;
+static OSThread *mainThread;
+static OSThread *volatile backgroundThread = NULL;
+static volatile bool backgroundStop = false;
 
 void enableApd()
 {
@@ -162,6 +165,7 @@ void initState()
     OSTime t = OSGetTime();
 
     app = APP_STATE_RUNNING;
+    mainThread = OSGetCurrentThread();
 
     debugInit();
     debugPrintf("NUSspli " NUSSPLI_VERSION);
@@ -235,26 +239,57 @@ static bool pumpEvents(void)
     return true;
 }
 
+bool isMainThread()
+{
+    return OSGetCurrentThread() == mainThread;
+}
+
+void setBackgroundThread(OSThread *thread)
+{
+    backgroundStop = false;
+    backgroundThread = thread;
+}
+
+bool isBackgroundThread()
+{
+    return backgroundThread != NULL && OSGetCurrentThread() == backgroundThread;
+}
+
+void cancelBackground()
+{
+    backgroundStop = true;
+}
+
+bool backgroundCancelled()
+{
+    return backgroundStop;
+}
+
 bool AppRunning(bool mainthread)
 {
-    // mainthread tells us whether the caller is the main thread and is
-    // taken as given: a worker passes false, only observes the state and
-    // never pumps, so no thread ID is checked here. Only the main thread
-    // may run the pump: SDL runs its ProcUI foreground release callback
-    // from inside it, and a worker pumping after the power button was
-    // pressed would hand the foreground back (GX2DrawDone, freeing the
+    // mainthread tells us whether the caller is the main thread. A worker
+    // passes false, only observes the state and never pumps. The one
+    // exception is the queue thread of the download manager: it runs the
+    // engine code the main thread used to run and passes true with it, so
+    // the thread is checked as well before anything is pumped. Only the
+    // main thread may run the pump: SDL runs its ProcUI foreground release
+    // callback from inside it, and a worker pumping after the power button
+    // was pressed would hand the foreground back (GX2DrawDone, freeing the
     // scan buffers, destroying the MEM1 heap) while the main thread still
     // draws and wedge the GPU.
     bool running = app != APP_STATE_STOPPING && app != APP_STATE_HOME && app != APP_STATE_STOPPED;
 
-    if(running && mainthread)
+    if(running && backgroundStop && isBackgroundThread())
+        return false;
+
+    if(running && mainthread && isMainThread())
         // SDL owns ProcUI now: the release callback frees the foreground GPU
         // state from inside the event pump and the draw-done release is
         // deferred into a later pump, so exactly one thread may run the pump
         // at a time. Otherwise a thread can pass the state check above while
         // the release is pending and hand the foreground back in the middle
         // of the shutdown cleanup, cutting the network and the worker
-        // threads out from under it. This is ensured by the if(mainthread)
+        // threads out from under it. This is ensured by the thread check
         // above.
         running = pumpEvents();
 
