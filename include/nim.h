@@ -20,6 +20,7 @@
 
 #include <wut-fixups.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <tmd.h>
@@ -85,9 +86,13 @@ extern "C"
     // the info block of its package (0x50 bytes in Cemu), and how many.
 #define NIM_PACKAGE_INFO_SIZE 0x50
     uint32_t nimListPackages(uint64_t *tids, uint8_t (*infos)[NIM_PACKAGE_INFO_SIZE], uint32_t max);
-    // Removes the task of a title from the Download Management, with what
-    // it has downloaded so far.
-    NNResult nimUnregister(uint64_t tid);
+    // The ID of the package the Download Management holds for a title, see
+    // nimUnregister() in nim.c. False when there is none.
+#define NIM_MAX_PACKAGES 16
+    bool nimFindPackage(uint64_t tid, uint64_t *packageId);
+    // Removes a package from the Download Management, with what it has
+    // downloaded so far. Takes the ID of the package, see nimFindPackage().
+    NNResult nimUnregister(uint64_t packageId);
     // The system picks the contents of the title itself.
     NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid);
 

@@ -695,7 +695,14 @@ static void pdSystemDownload()
             }
 
             pdNimWait();
-            res = nimUnregister(pdTmd->tid);
+            // The package has an ID of its own, the title ID is only how it
+            // is found. Without a package the title ID is the last try,
+            // its refusal shows the list.
+            uint64_t packageId;
+            if(!nimFindPackage(pdTmd->tid, &packageId))
+                packageId = pdTmd->tid;
+
+            res = nimUnregister(packageId);
             if(NNResult_IsFailure(res))
             {
                 // Registered by title ID but not found by it to remove:
