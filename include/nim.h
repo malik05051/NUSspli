@@ -45,10 +45,10 @@ extern "C"
      * the task config from Cemu, and what the system expects in it was
      * found out on a 5.5.5E console: see nimMakeConfig() in nim.c.
      *
-     * The system installs with the ticket it has: an update gets its public
-     * one through addUpdateTicket() in ticket.c (nn::nim's own
-     * DownloadPatchTitleTicket added none), everything else needs one on the
-     * console already (bought, or left behind by an earlier install). It
+     * The system installs with the ticket it has, so a title needs one on
+     * the console already (bought, or left behind by an earlier install).
+     * nn::nim::DownloadPatchTitleTicket added none for an update, which is
+     * why NUSspli downloads an update without one itself. The system
      * also fetches data of its own from the servers of Nintendo (the icon
      * of the title, for example), so a title they no longer have all of
      * fails even with a ticket, while NUSspli itself can still install it.

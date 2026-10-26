@@ -85,6 +85,8 @@ static bool pdMenuActive;
 static bool pdToQueue;
 static bool pdAutoAddToQueue;
 static bool pdAutoStartQueue;
+// Set by pdSystemDownload(): the queue starts in the background.
+static bool pdInBackground;
 static void *pdOverlay;
 
 static inline bool isInstalled(const TitleEntry *entry, MCPTitleListType *out)
@@ -693,8 +695,10 @@ void systemDownloadsInfo()
 // Hands the title to the Wii U Download Management instead of downloading
 // it here: the system downloads and installs it in the background and lists
 // it there, see nim.h. It installs with the ticket the console has, so a
-// game without one gets a warning first and an update fetches its own.
-static void pdSystemDownload()
+// game without one gets a warning first and an update without one goes to
+// NUSspli's own download instead. Returns true in that case, with the post
+// phase set up to queue the title and run the queue in the background.
+static bool pdSystemDownload()
 {
     char txt[1024];
 
@@ -705,14 +709,39 @@ static void pdSystemDownload()
     if(ans < 0)
     {
         pdFinish(0);
-        return;
+        return false;
     }
 
     if(ans == 0)
-        return; // back to the settings
+        return false; // back to the settings
 
-    const bool fetchTicket = isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid);
-    if(!isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid))
+    // An update without its ticket on the console downloads in the Wii U
+    // Download Management but does not install (105-3683). NUSspli's own
+    // download installs the ticket with it, so the update goes there instead,
+    // in the background like everything the download manager runs.
+    if(isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid))
+    {
+        snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+            localise("There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nDownload and install it with NUSspli in the background instead?\nNUSspli installs the ticket with it."),
+            localise("Yes"), localise("No"));
+        ans = pdAskAnswer(uiShowOverlay(txt));
+        if(ans < 0)
+        {
+            pdFinish(0);
+            return false;
+        }
+
+        if(ans == 0)
+            return false;
+
+        operation = OPERATION_DOWNLOAD_INSTALL;
+        pdToQueue = true;
+        pdInBackground = true;
+        pdMenuActive = false;
+        return true;
+    }
+
+    if(!hasTicket(pdTmd->tid))
     {
         snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
             localise("There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?"),
@@ -721,79 +750,21 @@ static void pdSystemDownload()
         if(ans < 0)
         {
             pdFinish(0);
-            return;
+            return false;
         }
 
         if(ans == 0)
-            return;
-    }
-
-    // An update without its ticket downloads, but does not install
-    // (105-3683): its public ticket goes into the ticket store first, after
-    // a backup of the store. A refusal below takes it out again.
-    bool addedTicket = false;
-    if(fetchTicket)
-    {
-        snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-            localise("There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nAdd the free ticket from the servers of Nintendo to the console?\nThe ticket store is backed up to the SD card first."),
-            localise("Yes"), localise("No"));
-        ans = pdAskAnswer(uiShowOverlay(txt));
-        if(ans < 0)
-        {
-            pdFinish(0);
-            return;
-        }
-
-        if(ans == 0)
-            return;
-
-        pdNimWait();
-        int files;
-        int misplaced;
-        const char *err = NULL;
-        if(dumpTicketStore(&files, &misplaced) < 0)
-            err = localise("Backing up the ticket store to the SD card failed.");
-        else if(misplaced != 0)
-            err = localise("The ticket store of this console is not laid out as expected,\nso nothing was changed. See SD:/NUSspli-tickets.txt");
-        else
-        {
-            switch(addUpdateTicket(pdTmd->tid))
-            {
-                case ADD_TICKET_OK:
-                    addedTicket = true;
-                    addToScreenLog("Ticket of \"%s\" added to the ticket store", pdEntry->name);
-                    break;
-                case ADD_TICKET_NOT_ON_SERVER:
-                    err = localise("The servers of Nintendo have no ticket for this update.");
-                    break;
-                case ADD_TICKET_INVALID:
-                    err = localise("The ticket from the servers of Nintendo is not the public ticket of this update.");
-                    break;
-                default:
-                    err = localise("Adding the ticket failed. The backup of the ticket store\nis on the SD card: SD:/NUSspli/ticket-backup/");
-                    break;
-            }
-        }
-
-        if(err != NULL)
-        {
-            readInput(); // see pdNimRefused()
-            showErrorFrame(err);
-            return;
-        }
+            return false;
     }
 
     pdNimWait();
     NNResult res = nimInitialize();
     if(NNResult_IsFailure(res))
     {
-        if(addedTicket)
-            deleteTicket(pdTmd->tid);
-
         readInput();
         snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
         showErrorFrame(txt);
-        return;
+        return false;
     }
 
     NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
@@ -833,7 +804,7 @@ static void pdSystemDownload()
                 nimFinalize();
                 if(ans < 0)
                     pdFinish(0);
-                return;
+                return false;
             }
 
             pdNimWait();
@@ -849,23 +820,18 @@ static void pdSystemDownload()
                 // Registered by title ID but not found by it to remove:
                 // what does the Download Management hold?
                 pdNimPackages(res);
-                return;
+                return false;
             }
 
             nimFinalize();
             readInput();
             addToScreenLog("\"%s\" removed from the Wii U Download Management", pdEntry->name);
             showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD_REMOVED);
-            return;
+            return false;
         }
 
-        // Nothing of this title is in the Download Management, so its
-        // ticket goes again: the console is left as it was.
-        if(addedTicket)
-            deleteTicket(pdTmd->tid);
-
         pdNimRefused(res);
-        return;
+        return false;
     }
 
     nimFinalize();
@@ -874,6 +840,7 @@ static void pdSystemDownload()
     addToScreenLog("\"%s\" added to the Wii U Download Management", pdEntry->name);
     showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD);
     pdFinish(0);
+    return false;
 }
 
 // The code behind the original settings loop: the pre-selection dialogs,
@@ -1082,7 +1049,13 @@ runPost:
         if(ret)
         {
             pdRambuf = NULL;
-            if(pdAutoStartQueue && !queueRunning())
+            if(pdInBackground)
+            {
+                // A running queue takes it in turn.
+                if(!queueRunning() && !startQueueInBackground())
+                    ret = false;
+            }
+            else if(pdAutoStartQueue && !queueRunning())
             {
                 disableApd();
                 ret = !proccessQueue();
@@ -1182,7 +1155,10 @@ static void updatePDMenu()
 
         if(vpad.trigger & VPAD_BUTTON_X)
         {
-            pdSystemDownload();
+            // True when the title goes to NUSspli's own download instead.
+            if(pdSystemDownload())
+                pdRunPost();
+
             return;
         }
 
@@ -1248,6 +1224,7 @@ bool predownloadMenu(const TitleEntry *entry, NUSDEV forcedInstDev)
     pdTmd = NULL;
     pdAutoAddToQueue = false;
     pdAutoStartQueue = false;
+    pdInBackground = false;
     pdInstalled = isInstalled(entry, &pdTitleList);
 
     NUSDEV usbMounted = getUSB();
