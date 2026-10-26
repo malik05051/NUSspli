@@ -215,5 +215,9 @@
     "Added to the Wii U Download Management!": "Wii U İndirme Yönetimi'ne eklendi!",
     "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "Konsolda bu başlık için bir bilet yok,\nbu yüzden Wii U İndirme Yönetimi muhtemelen onu yükleyemeyecek.\n\nYine de eklensin mi?",
     "The Wii U Download Management refused the title.": "Wii U İndirme Yönetimi başlığı reddetti.",
-    "Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?": "Deneysel: bir başlığı Wii U İndirme Yönetimi'ne vermek\nkonsolun çökmesine neden olabilir.\n\nDevam edilsin mi?"
+    "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?": "Deneysel: Nintendo sunucularında hâlâ tüm verileri varsa, Wii U İndirme Yönetimi\nbu başlığı kendisi indirip yükler.\n\nDevam edilsin mi?",
+    "It is already in the Download Management.\nClear it there first.": "Zaten İndirme Yönetimi'nde.\nÖnce orada sil.",
+    "It is already installed.": "Zaten yüklü.",
+    "A file of this title is no longer on the servers of Nintendo.": "Bu başlığın bir dosyası artık Nintendo sunucularında değil.",
+    "The icon of this title is no longer on the servers of Nintendo.": "Bu başlığın simgesi artık Nintendo sunucularında değil."
 }

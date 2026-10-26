@@ -220,5 +220,9 @@
     "Added to the Wii U Download Management!": "Added to the Wii U Download Management!",
     "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?",
     "The Wii U Download Management refused the title.": "The Wii U Download Management refused the title.",
-    "Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?": "Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?"
+    "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?": "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?",
+    "It is already in the Download Management.\nClear it there first.": "It is already in the Download Management.\nClear it there first.",
+    "It is already installed.": "It is already installed.",
+    "A file of this title is no longer on the servers of Nintendo.": "A file of this title is no longer on the servers of Nintendo.",
+    "The icon of this title is no longer on the servers of Nintendo.": "The icon of this title is no longer on the servers of Nintendo."
 }

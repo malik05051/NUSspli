@@ -41,11 +41,9 @@ extern NNResult NIMRegisterTitlePackageTask(const NimTitlePackageTaskConfig *con
 extern void NIMResultErrorConstruct(void *resultError, const NNResult *result, int32_t unknown) __asm__("Construct__Q3_2nn3nim11ResultErrorFQ2_2nn6Resulti");
 extern int32_t NIMResultErrorGetErrorCode(const void *resultError) __asm__("GetErrorCode__Q3_2nn3nim11ResultErrorCFv");
 extern NNResult NIMDownloadPatchTitleTicket(uint64_t titleId) __asm__("DownloadPatchTitleTicket__Q2_2nn3nimFUL");
-extern NNResult NIMIsECommerceInfrastructureStandbyMode(bool *standby) __asm__("IsECommerceInfrastructureStandbyMode__Q2_2nn3nimFPb");
-extern NNResult NIMGetECommerceInfrastructureCountry(void *country) __asm__("GetECommerceInfrastructureCountry__Q2_2nn3nimFPQ3_2nn3nim7Country");
 
-// Every line goes out in front of its call as well: the last one that
-// reaches the UDP log names the call that crashed.
+// Every call is logged in front of itself as well: the last line that
+// reaches the UDP log names a call that crashes.
 NNResult nimInitialize()
 {
     debugPrintf("NIM: Initialize()");
@@ -66,13 +64,13 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
     config->titleIdHigh = (uint32_t)(tid >> 32);
     config->titleIdLow = (uint32_t)tid;
     config->regionOrLanguage = 0;
-    // The values of nn::Cafe::TitleType are not documented. A type of 0 for
-    // an update was refused as a usage error (0xC0512E80), so the type is
-    // taken from the title ID now: its category, 0x00 for a game, 0x02 for a
-    // demo, 0x0C for DLC and 0x0E for an update.
+    // The values of nn::Cafe::TitleType are not documented. The category of
+    // the title ID fits the byte (0x00 for a game, 0x02 for a demo, 0x0C
+    // for DLC, 0x0E for an update) and the system accepted it for both an
+    // application and an update.
     config->titleType = (uint8_t)(tid >> 32);
     // 1 is the internal memory in Cemu, the eShop reads these two to find
-    // the device of the title.
+    // the device of the title. A 5.5.5E console installed YouTube there.
     config->applicationBoxDevice1 = 1;
     config->applicationBoxDevice2 = 1;
     // Byte 0x15 is set to 1 by Cemu, its meaning is unknown.
@@ -81,8 +79,9 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid)
     // console that downloaded YouTube but left the install for the next
     // start of the title ("start the software to finish the installation"),
     // which a title that is not installed yet never gets: it has no icon to
-    // start. 0 and 1 are not named anywhere, 1 is the guess for installing
-    // right after the download, the way the eShop does it for a purchase.
+    // start. 0 and 1 are not named anywhere: with 1 the same console
+    // installed YouTube right after the download, the way the eShop does it
+    // for a purchase.
     config->postDownloadAction = 1;
 
     debugPrintf("NIM config for %016llX: type %u, devices %u/%u, action %u", tid, config->titleType, config->applicationBoxDevice1, config->applicationBoxDevice2, config->postDownloadAction);
@@ -123,28 +122,6 @@ int32_t nimErrorCode(NNResult res)
     int32_t code = NIMResultErrorGetErrorCode(resultError);
     debugPrintf("NIM: error code %d", code);
     return code;
-}
-
-NNResult nimStandbyMode(bool *standby)
-{
-    // Room and alignment for a bool the system may write wider.
-    uint8_t buf[0x40] __attribute__((__aligned__(0x40)));
-    OSBlockSet(buf, 0, sizeof(buf));
-    debugPrintf("NIM: IsECommerceInfrastructureStandbyMode()");
-    NNResult res = NIMIsECommerceInfrastructureStandbyMode((bool *)buf);
-    *standby = buf[0] != 0;
-    return res;
-}
-
-NNResult nimCountry(uint8_t country[8])
-{
-    // The size of nn::nim::Country is unknown, Cemu writes one word.
-    uint8_t buf[0x40] __attribute__((__aligned__(0x40)));
-    OSBlockSet(buf, 0, sizeof(buf));
-    debugPrintf("NIM: GetECommerceInfrastructureCountry()");
-    NNResult res = NIMGetECommerceInfrastructureCountry(buf);
-    OSBlockMove(country, buf, 8, false);
-    return res;
 }
 
 void nimFinalize()
