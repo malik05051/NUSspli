@@ -137,7 +137,7 @@ NNResult nimUnregister(uint64_t packageId)
     return res;
 }
 
-bool nimFindPackage(uint64_t tid, uint64_t *packageId)
+bool nimFindPackage(uint64_t tid, uint64_t *packageId, uint8_t info[NIM_PACKAGE_INFO_SIZE])
 {
     static uint64_t ids[NIM_MAX_PACKAGES] __attribute__((__aligned__(0x40)));
     static uint8_t infos[NIM_MAX_PACKAGES][NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
@@ -153,6 +153,8 @@ bool nimFindPackage(uint64_t tid, uint64_t *packageId)
         if(packageTid == tid)
         {
             *packageId = ids[i];
+            if(info != NULL)
+                OSBlockMove(info, infos[i], NIM_PACKAGE_INFO_SIZE, false);
             debugPrintf("NIM: package of %016llX is %016llX", tid, ids[i]);
             return true;
         }
@@ -180,6 +182,20 @@ uint32_t nimListPackages(uint64_t *tids, uint8_t (*infos)[NIM_PACKAGE_INFO_SIZE]
     debugPrintf("NIM: GetTitlePackageInfos() returned %#010x", res.value);
     (void)res; // Only read by the debug log
     return num;
+}
+
+// Cemu leaves the end of the info block unnamed: two words at 0x40 and
+// 0x44, the layout of nn::nim::ResultError as it emulates that object,
+// and a state at 0x48 that takes the values 0 to 7. The error code is read
+// from the two words as the error object they look like.
+int32_t nimPackageErrorCode(const uint8_t info[NIM_PACKAGE_INFO_SIZE])
+{
+    uint32_t resultError[16] __attribute__((__aligned__(0x40)));
+    OSBlockSet(resultError, 0, sizeof(resultError));
+    OSBlockMove(resultError, info + 0x40, 8, false);
+    int32_t code = NIMResultErrorGetErrorCode(resultError);
+    debugPrintf("NIM: package error code %d", code);
+    return code;
 }
 
 int32_t nimErrorCode(NNResult res)

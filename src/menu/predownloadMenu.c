@@ -682,6 +682,23 @@ static void pdSystemDownload()
         if(nimErrorCode(res) == 1050583) // TITLE_PACKAGE_ALREADY_REGISTERED
         {
             readInput(); // see pdNimRefused()
+
+            // Where the task stands, as the system keeps it: the Download
+            // Management may not open to show it.
+            static uint8_t info[NIM_PACKAGE_INFO_SIZE] __attribute__((__aligned__(0x40)));
+            uint64_t packageId;
+            if(nimFindPackage(pdTmd->tid, &packageId, info))
+            {
+                int32_t code = nimPackageErrorCode(info);
+                uint32_t words[2];
+                OSBlockMove(words, info + 0x40, sizeof(words), false);
+                int len = snprintf(txt, sizeof(txt), "nn::nim package %016llX\n\nstate (0x48): %u\nerror (0x40): %08X %08X -> %03d-%04d\n",
+                    packageId, info[0x48], (unsigned int)words[0], (unsigned int)words[1], (int)(code / 10000), (int)(code % 10000));
+                for(int i = 0; i < NIM_PACKAGE_INFO_SIZE && len > 0 && (size_t)len < sizeof(txt); ++i)
+                    len += snprintf(txt + len, sizeof(txt) - len, i % 16 == 0 ? "\n%02X" : " %02X", info[i]);
+
+                showErrorFrame(txt);
+            }
             snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
                 localise("It is already in the Download Management.\nRemove it from there, with what it downloaded so far?"),
                 localise("Yes"), localise("No"));
@@ -698,8 +715,7 @@ static void pdSystemDownload()
             // The package has an ID of its own, the title ID is only how it
             // is found. Without a package the title ID is the last try,
             // its refusal shows the list.
-            uint64_t packageId;
-            if(!nimFindPackage(pdTmd->tid, &packageId))
+            if(!nimFindPackage(pdTmd->tid, &packageId, NULL))
                 packageId = pdTmd->tid;
 
             res = nimUnregister(packageId);

@@ -87,9 +87,12 @@ extern "C"
 #define NIM_PACKAGE_INFO_SIZE 0x50
     uint32_t nimListPackages(uint64_t *tids, uint8_t (*infos)[NIM_PACKAGE_INFO_SIZE], uint32_t max);
     // The ID of the package the Download Management holds for a title, see
-    // nimUnregister() in nim.c. False when there is none.
+    // nimUnregister() in nim.c, and its info block when info is not NULL.
+    // False when there is none.
 #define NIM_MAX_PACKAGES 16
-    bool nimFindPackage(uint64_t tid, uint64_t *packageId);
+    bool nimFindPackage(uint64_t tid, uint64_t *packageId, uint8_t info[NIM_PACKAGE_INFO_SIZE]);
+    // The error code the info block of a package carries, see nim.c.
+    int32_t nimPackageErrorCode(const uint8_t info[NIM_PACKAGE_INFO_SIZE]);
     // Removes a package from the Download Management, with what it has
     // downloaded so far. Takes the ID of the package, see nimFindPackage().
     NNResult nimUnregister(uint64_t packageId);
