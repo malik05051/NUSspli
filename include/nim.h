@@ -20,7 +20,6 @@
 
 #include <wut-fixups.h>
 
-#include <stdbool.h>
 #include <stdint.h>
 
 #include <tmd.h>
@@ -37,24 +36,20 @@ extern "C"
     /*
      * The Wii U Download Management: the system lists and runs the download
      * tasks of nn_nim, the title installer the eShop hands its downloads to.
-     * The steps below register such a task for a title, so the system
+     * The calls below register such a task for a title, so the system
      * downloads and installs it in the background and shows it in its
      * Download Management, NUSspli does not download anything itself.
      *
-     * Experimental: nn_nim is not documented. The exports come from WUT and
-     * the layout of the task config from Cemu, which emulates the call the
-     * eShop makes. Which title type the eShop passes is not known, so a
-     * refusal comes back as the result of the system and is shown as such.
+     * nn_nim is not documented. The exports come from WUT, the layout of
+     * the task config from Cemu, and what the system expects in it was
+     * found out on a 5.5.5E console: see nimMakeConfig() in nim.c.
      *
-     * The system installs with the ticket it has: an update brings its own,
-     * everything else needs one on the console already (bought, or left
-     * behind by an earlier install).
-     *
-     * The handoff crashed the console in the first tests, so it is split
-     * into its calls: the caller shows every step before it runs it, and
-     * the last screen before a crash names the call that caused it. The
-     * config is filled in by NUSspli, the system call the eShop uses for
-     * it crashed the console (see nimMakeConfig() in nim.c).
+     * The system installs with the ticket it has: an update gets its own
+     * through nimDownloadPatchTicket(), everything else needs one on the
+     * console already (bought, or left behind by an earlier install). It
+     * also fetches data of its own from the servers of Nintendo (the icon
+     * of the title, for example), so a title they no longer have all of
+     * fails even with a ticket, while NUSspli itself can still install it.
      */
 
     // nn::nim::TitlePackageTaskConfig, as Cemu fills it for the eShop.
@@ -89,12 +84,9 @@ extern "C"
     // The system picks the contents of the title itself.
     NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid);
 
-    // Diagnosis of a refusal, between nimInitialize() and nimFinalize():
-    // the error code the system would show for a result, whether the
-    // eShop infrastructure is in standby and the country it is set to.
+    // The error code the system shows its users for a result (105-0583 is
+    // 1050583), between nimInitialize() and nimFinalize().
     int32_t nimErrorCode(NNResult res);
-    NNResult nimStandbyMode(bool *standby);
-    NNResult nimCountry(uint8_t country[8]);
     void nimFinalize();
 
 #ifdef __cplusplus

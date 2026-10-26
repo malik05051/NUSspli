@@ -539,66 +539,81 @@ static int pdAskAnswer(void *ovl)
     return ret;
 }
 
+// The calls into the system block for a while (the registration took
+// seconds in the tests), so a frame says so before they run.
+static void pdNimWait()
+{
+    showStatusFrame(localise("Please wait..."), NULL, false, -1);
+}
+
+// Closes NIM and shows why the system refused the title: the error code it
+// would show itself, with the reason in words for the codes the tests ran
+// into (the names are the ones WiiUBrew lists for them).
+static void pdNimRefused(NNResult res)
+{
+    int32_t code = nimErrorCode(res);
+    nimFinalize();
+    // A button pressed during the wait must not close the dialog below: a
+    // press is reported once, so reading it here takes it away from it.
+    readInput();
+
+    const char *reason = NULL;
+    if(code / 10000 == 105)
+    {
+        switch(code % 10000)
+        {
+            case 583: // TITLE_PACKAGE_ALREADY_REGISTERED
+                reason = "It is already in the Download Management.\nClear it there first.";
+                break;
+            case 601: // NEW_TITLE_ALREADY_EXISTS
+                reason = "It is already installed.";
+                break;
+            case 955: // BOSS_HTTP_ERROR_404_NOT_FOUND
+                reason = "A file of this title is no longer on the servers of Nintendo.";
+                break;
+            case 1017: // IDBE_FAILED_TO_DOWNLOAD
+                reason = "The icon of this title is no longer on the servers of Nintendo.";
+                break;
+        }
+    }
+
+    char txt[512];
+    if(code >= 1000000)
+        snprintf(txt, sizeof(txt), "%s\n\n%s%s%03d-%04d", localise("The Wii U Download Management refused the title."), reason == NULL ? "" : localise(reason), reason == NULL ? "" : "\n\n", (int)(code / 10000), (int)(code % 10000));
+    else // Not a code the system knows: the result as it is
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+
+    showErrorFrame(txt);
+}
+
 // Hands the title to the Wii U Download Management instead of downloading
 // it here: the system downloads and installs it in the background and lists
 // it there, see nim.h. It installs with the ticket the console has, so a
-// title without one gets a warning first - updates bring their own.
-// A stop of the handoff: names the call that runs next (and the config the
-// system filled in, once there is one) and runs it on A. B backs out.
-static bool pdNimStep(char *txt, size_t size, const char *step, const char *call, const NimTitlePackageTaskConfig *config)
-{
-    int len = snprintf(txt, size, "nn_nim %s\n\n%s", step, call);
-    if(config != NULL && len > 0 && (size_t)len < size)
-    {
-        len += snprintf(txt + len, size - len, "\n\nTitlePackageTaskConfig:\n");
-        const uint8_t *bytes = (const uint8_t *)config;
-        for(size_t i = 0; i < sizeof(NimTitlePackageTaskConfig) && len > 0 && (size_t)len < size; ++i)
-            len += snprintf(txt + len, size - len, i == 12 ? "\n%02X" : (i == 0 ? "%02X" : " %02X"), bytes[i]);
-    }
-
-    return (showErrorDialog(txt, A_CONTINUE | B_RETURN) & A_CONTINUE) != 0;
-}
-
-// The calls into the system block for a while (the registration took
-// seconds in the tests), so a frame says so before every one of them.
-static void pdNimWait(const char *call)
-{
-    showStatusFrame(call, localise("Please wait..."), false, -1);
-}
-
-// A button pressed during the wait must not answer the next dialog: a
-// press is reported once, so reading it here takes it away from that
-// dialog, which closes on any button.
-static void pdNimWaitDone()
-{
-    readInput();
-}
-
+// game without one gets a warning first and an update fetches its own.
 static void pdSystemDownload()
 {
     char txt[1024];
 
-    // The call into the system is not documented and took a console down
-    // in the first test, so it runs only on a clear yes.
     snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-        localise("Experimental: handing a title to the Wii U Download Management\nmay crash the console.\n\nContinue?"),
+        localise("Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?"),
         localise("Yes"), localise("No"));
-    int warn = pdAskAnswer(uiShowOverlay(txt));
-    if(warn < 0)
+    int ans = pdAskAnswer(uiShowOverlay(txt));
+    if(ans < 0)
     {
         pdFinish(0);
         return;
     }
 
-    if(warn == 0)
-        return;
+    if(ans == 0)
+        return; // back to the settings
 
+    const bool fetchTicket = isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid);
     if(!isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid))
     {
         snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
             localise("There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?"),
             localise("Yes"), localise("No"));
-        int ans = pdAskAnswer(uiShowOverlay(txt));
+        ans = pdAskAnswer(uiShowOverlay(txt));
         if(ans < 0)
         {
             pdFinish(0);
@@ -606,119 +621,42 @@ static void pdSystemDownload()
         }
 
         if(ans == 0)
-            return; // back to the settings
+            return;
     }
 
-    // One stop in front of every call: the console crashed in the first
-    // tests and the last screen before a crash names the call that did it.
-    // An update without its ticket needs one more call to fetch it first.
-    const bool fetchTicket = isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid);
-    if(!pdNimStep(txt, sizeof(txt), fetchTicket ? "1/3" : "1/2", "nn::nim::Initialize()", NULL))
-        return;
-
-    pdNimWait("nn::nim::Initialize()");
+    pdNimWait();
     NNResult res = nimInitialize();
     if(NNResult_IsFailure(res))
     {
-        snprintf(txt, sizeof(txt), "%s\n\nnn::nim::Initialize(): %#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        readInput();
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
         showErrorFrame(txt);
         return;
     }
 
-    // Step 2 is filled in by NUSspli itself, the system call the eShop uses
-    // for it crashed the console (see nimMakeConfig): no stop needed.
+    // An update without its ticket is refused (105-0955), the system
+    // fetches the ticket of an update itself on request.
     if(fetchTicket)
     {
-        if(!pdNimStep(txt, sizeof(txt), "2/3", "nn::nim::DownloadPatchTitleTicket()", NULL))
-        {
-            nimFinalize();
-            return;
-        }
-
-        pdNimWait("nn::nim::DownloadPatchTitleTicket()");
         res = nimDownloadPatchTicket(pdTmd->tid);
         if(NNResult_IsFailure(res))
         {
-            int32_t code = nimErrorCode(res);
-            nimFinalize();
-            pdNimWaitDone();
-            snprintf(txt, sizeof(txt), "%s\n\nnn::nim::DownloadPatchTitleTicket(): %#010x (%d)", localise("The Wii U Download Management refused the title."), (unsigned int)res.value, (int)code);
-            showErrorFrame(txt);
+            pdNimRefused(res);
             return;
         }
     }
 
     NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
     nimMakeConfig(&config, pdTmd->tid);
-
-    if(!pdNimStep(txt, sizeof(txt), fetchTicket ? "3/3" : "2/2", "nn::nim::RegisterTitlePackageTask()", &config))
-    {
-        nimFinalize();
-        return;
-    }
-
-    pdNimWait("nn::nim::RegisterTitlePackageTask()");
     res = nimRegister(&config, pdTmd->tid);
-
-    // A usage error says one of the arguments is malformed. Cemu reads the
-    // two device bytes as 1 for the internal memory in its stub but as 0
-    // for it in a comment, so the other reading gets one more try: usage
-    // errors come back without a crash and without a task.
-    NNResult second = { .value = 0 };
-    bool retried = NNResult_IsFailure(res) && ((uint32_t)res.value >> 29) == 6; // LEVEL_USAGE
-    if(retried)
+    if(NNResult_IsFailure(res))
     {
-        config.applicationBoxDevice1 = 0;
-        config.applicationBoxDevice2 = 0;
-        second = nimRegister(&config, pdTmd->tid);
-    }
-
-    if(NNResult_IsFailure(res) && (!retried || NNResult_IsFailure(second)))
-    {
-        // Everything that may explain the refusal, read before NIM closes:
-        // the error code the system would show for it, the state of the
-        // eShop infrastructure and what the console holds of the title.
-        bool standby = false;
-        uint8_t country[8] = { 0 };
-        NNResult standbyRes = nimStandbyMode(&standby);
-        NNResult countryRes = nimCountry(country);
-        // Last: its object layout is the least known of the three.
-        int32_t code = nimErrorCode(res);
-        int32_t code2 = retried ? nimErrorCode(second) : 0;
-        nimFinalize();
-        pdNimWaitDone();
-
-        MCPTitleListType installed __attribute__((__aligned__(0x40)));
-        bool isInstalled = MCP_GetTitleInfo(mcpHandle, pdTmd->tid, &installed) == 0;
-        uint16_t installedVersion = isInstalled ? installed.titleVersion : 0;
-        // An update or DLC needs its game: is that one there?
-        bool baseInstalled = MCP_GetTitleInfo(mcpHandle, TID_TO_BASE(pdTmd->tid), &installed) == 0;
-
-        int len = snprintf(txt, sizeof(txt),
-            "%s\n\n"
-            "RegisterTitlePackageTask(NULL, 0), devices 1: %#010x (%d)\n",
-            localise("The Wii U Download Management refused the title."),
-            (unsigned int)res.value, (int)code);
-        if(retried && len > 0 && (size_t)len < sizeof(txt))
-            len += snprintf(txt + len, sizeof(txt) - len, "RegisterTitlePackageTask(NULL, 0), devices 0: %#010x (%d)\n", (unsigned int)second.value, (int)code2);
-        if(len > 0 && (size_t)len < sizeof(txt))
-            snprintf(txt + len, sizeof(txt) - len,
-                "IsECommerceInfrastructureStandbyMode(): %#010x, %s\n"
-                "GetECommerceInfrastructureCountry(): %#010x, %02X %02X %02X %02X %02X %02X %02X %02X\n"
-                "Ticket: %s\n"
-                "TMD version: %u, installed: %s%u\n"
-                "Base title installed: %s",
-                (unsigned int)standbyRes.value, standby ? "true" : "false",
-                (unsigned int)countryRes.value, country[0], country[1], country[2], country[3], country[4], country[5], country[6], country[7],
-                hasTicket(pdTmd->tid) ? "yes" : "no",
-                pdTmd->title_version, isInstalled ? "v" : "no ", installedVersion,
-                baseInstalled ? "yes" : "no");
-        showErrorFrame(txt);
+        pdNimRefused(res);
         return;
     }
 
     nimFinalize();
-    pdNimWaitDone();
+    readInput(); // see pdNimRefused()
 
     addToScreenLog("\"%s\" added to the Wii U Download Management", pdEntry->name);
     showFinishedScreen(pdEntry->name, FINISHING_OPERATION_SYSTEM_DOWNLOAD);
