@@ -46,7 +46,6 @@ extern uint32_t NIMGetNumTitlePackages(void) __asm__("GetNumTitlePackages__Q2_2n
 extern NNResult NIMListTitlePackagesStatically(uint64_t *titleIds, uint32_t max) __asm__("ListTitlePackagesStatically__Q2_2nn3nimFPULUi");
 extern NNResult NIMGetTitlePackageInfos(void *infos, const uint64_t *titleIds, uint32_t count) __asm__("GetTitlePackageInfos__Q2_2nn3nimFPQ3_2nn3nim16TitlePackageInfoPCULUi");
 extern NNResult NIMUnregisterTitlePackageTask(uint64_t titleId) __asm__("UnregisterTitlePackageTask__Q2_2nn3nimFUL");
-extern NNResult NIMDownloadPatchTitleTicket(uint64_t titleId) __asm__("DownloadPatchTitleTicket__Q2_2nn3nimFUL");
 
 // Every call is logged in front of itself as well: the last line that
 // reaches the UDP log names a call that crashes.
@@ -108,18 +107,6 @@ NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid)
     debugPrintf("NIM: RegisterTitlePackageTask(%016llX, no contents)", tid);
     NNResult res = NIMRegisterTitlePackageTask(config, NULL, 0);
     debugPrintf("NIM: RegisterTitlePackageTask() returned %#010x", res.value);
-    return res;
-}
-
-// An update without its ticket on the console was refused as a status error
-// (0xA051DD80, 105-0955) while the same update with its ticket got past that
-// check, so the ticket comes first: this is the call that fetches the ticket
-// of an update from the servers of Nintendo.
-NNResult nimDownloadPatchTicket(uint64_t tid)
-{
-    debugPrintf("NIM: DownloadPatchTitleTicket(%016llX)", tid);
-    NNResult res = NIMDownloadPatchTitleTicket(tid);
-    debugPrintf("NIM: DownloadPatchTitleTicket() returned %#010x", res.value);
     return res;
 }
 

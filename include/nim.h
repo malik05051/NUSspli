@@ -45,8 +45,9 @@ extern "C"
      * the task config from Cemu, and what the system expects in it was
      * found out on a 5.5.5E console: see nimMakeConfig() in nim.c.
      *
-     * The system installs with the ticket it has: an update gets its own
-     * through nimDownloadPatchTicket(), everything else needs one on the
+     * The system installs with the ticket it has: an update gets its public
+     * one through addUpdateTicket() in ticket.c (nn::nim's own
+     * DownloadPatchTitleTicket added none), everything else needs one on the
      * console already (bought, or left behind by an earlier install). It
      * also fetches data of its own from the servers of Nintendo (the icon
      * of the title, for example), so a title they no longer have all of
@@ -79,9 +80,6 @@ extern "C"
     // what nimInitialize() opened.
     NNResult nimInitialize();
     void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version);
-    // Fetches the ticket of an update from the servers of Nintendo, which
-    // the registration of an update without one needs.
-    NNResult nimDownloadPatchTicket(uint64_t tid);
     // What the Download Management holds: up to max title IDs, each with
     // the info block of its package (0x50 bytes in Cemu), and how many.
 #define NIM_PACKAGE_INFO_SIZE 0x50
