@@ -19,6 +19,7 @@
 
 #include <wut-fixups.h>
 
+#include <stdio.h>
 #include <string.h>
 
 #include <input.h>
@@ -28,9 +29,11 @@
 #include <menu/main.h>
 #include <menu/queue.h>
 #include <menu/utils.h>
+#include <nim.h>
 #include <queue.h>
 #include <renderer.h>
 #include <state.h>
+#include <ticket.h>
 #include <ui.h>
 
 #pragma GCC diagnostic ignored "-Wundef"
@@ -175,7 +178,166 @@ static void renderQueueMenu()
     strcpy(toScreen, localise(BUTTON_PLUS " to start the queue"));
     strcat(toScreen, " || ");
     strcat(toScreen, localise(BUTTON_MINUS " to delete an item"));
+    strcat(toScreen, " || ");
+    strcat(toScreen, localise(BUTTON_Y " Download Management"));
     textToFrame(MAX_LINES - 1, ALIGNED_CENTER, toScreen);
+}
+
+// The A/B question of the handoff below stays an overlay on the frame of
+// the queue, the way the pre-download screen asks its questions.
+static void *qmOverlay;
+
+static void updateQMAsk()
+{
+    if(vpad.trigger & VPAD_BUTTON_B)
+        uiPop();
+    else if(vpad.trigger & VPAD_BUTTON_A)
+    {
+        uiSetResult(1);
+        uiPop();
+    }
+}
+
+static void leaveQMAsk()
+{
+    uiHideOverlay(qmOverlay);
+    qmOverlay = NULL;
+}
+
+static const UIScreen qmAskScreen = {
+    .name = "queue question",
+    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B,
+    .update = updateQMAsk,
+    .leave = leaveQMAsk,
+};
+
+// Returns 1 on A, 0 on B and -1 when there is no overlay or the app
+// stopped. The overlay is gone when this returns.
+static int qmAskAnswer(void *ovl)
+{
+    if(ovl == NULL)
+        return -1;
+
+    qmOverlay = ovl;
+    int ret = uiModal(&qmAskScreen, NULL);
+    if(!AppRunning(true))
+        return -1;
+
+    return ret;
+}
+
+/*
+ * Hands the entries the system can take to the Wii U Download Management,
+ * which downloads and installs them itself - in its own background and,
+ * with the standby functions of the console turned on, while the console
+ * is switched off, which NUSspli itself cannot do. What it took is out of
+ * the queue, the rest stays in it for NUSspli.
+ *
+ * Returns true when the screen below is gone with the last entry.
+ */
+static bool qmSystemDownload()
+{
+    char txt[1024];
+    snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+        localise("Experimental: the Wii U Download Management downloads and installs\nthe titles itself, also while the console is switched off when its\nstandby functions are on. It installs to the internal memory, it needs\nthe ticket of a title on the console, and it keeps the rest here."),
+        localise("Yes"), localise("No"));
+
+    if(qmAskAnswer(uiShowOverlay(txt)) != 1)
+        return false;
+
+    // Both halves of the walk below take their time - hasTicket() reads the
+    // ticket bucket of the console and the registration took seconds in the
+    // tests - so a frame says so while they run.
+    showStatusFrame(localise("Please wait..."), NULL, false, -1);
+
+    NNResult res = nimInitialize();
+    if(NNResult_IsFailure(res))
+    {
+        readInput();
+        snprintf(txt, sizeof(txt), "%s\n\n%#010x", localise("The Wii U Download Management refused the title."), (unsigned int)res.value);
+        showErrorFrame(txt);
+        return false;
+    }
+
+    NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
+    size_t total = getListSize(titleQueue);
+    size_t handed = 0;
+    size_t kept = 0;
+    size_t refused = 0;
+    int32_t lastCode = 0;
+
+    // From the back of the queue: an entry that leaves it keeps the indices
+    // below it where they are.
+    for(size_t i = total; i > 0; --i)
+    {
+        uint32_t idx = (uint32_t)(i - 1);
+
+        lockQueue();
+        const TitleData *data = getContent(titleQueue, idx);
+        // The Download Management always installs instead of leaving the
+        // files of a title on a device, so an entry that only downloads is
+        // none of its business.
+        bool installs = data != NULL && (data->operation & OPERATION_INSTALL);
+        uint64_t tid = data == NULL ? 0 : data->tmd->tid;
+        uint16_t tver = data == NULL ? 0 : data->tmd->title_version;
+        unlockQueue();
+
+        // It installs with the ticket the console has, so without one it
+        // downloads the title but fails to install it (105-3683, see
+        // nim.h). The check reads files, so it runs without the lock.
+        if(!installs || !hasTicket(tid))
+        {
+            ++kept;
+            continue;
+        }
+
+        nimMakeConfig(&config, tid, tver);
+        res = nimRegister(&config, tid);
+        if(NNResult_IsFailure(res))
+        {
+            lastCode = nimErrorCode(res);
+            ++refused;
+            continue;
+        }
+
+        // The entry the download manager works on is the only one that
+        // cannot be removed, and the handoff is not offered while it runs.
+        removeFromQueue(idx);
+        ++handed;
+    }
+
+    nimFinalize();
+    // A button pressed during the wait must not answer the dialogs below.
+    readInput();
+
+    addToScreenLog("%u of %u queue entries handed to the Wii U Download Management", (unsigned int)handed, (unsigned int)total);
+    if(kept != 0)
+        addToScreenLog("%u stayed in the queue for NUSspli itself", (unsigned int)kept);
+
+    if(refused != 0)
+    {
+        snprintf(txt, sizeof(txt), "%s\n\n%03d-%04d", localise("The Wii U Download Management refused the title."), (int)(lastCode / 10000), (int)(lastCode % 10000));
+        showErrorFrame(txt);
+    }
+
+    if(handed == 0)
+    {
+        if(refused == 0)
+            showErrorFrame(localise("The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console. NUSspli downloads them itself."));
+
+        return false;
+    }
+
+    showFinishedScreen(NULL, FINISHING_OPERATION_SYSTEM_DOWNLOAD_QUEUE);
+    if(getListSize(titleQueue) == 0)
+    {
+        uiSetResult(0);
+        uiPop();
+        return true;
+    }
+
+    clampQueueView();
+    return false;
 }
 
 static void updateQueueMenu()
@@ -327,6 +489,15 @@ static void updateQueueMenu()
         }
     }
 
+    if(vpad.trigger & VPAD_BUTTON_Y && !queueRunning())
+    {
+        if(qmSystemDownload())
+            return;
+
+        if(!AppRunning(true))
+            return;
+    }
+
     if(vpad.trigger & VPAD_BUTTON_PLUS && queueRunning())
     {
         queueProgressMenu();
@@ -380,7 +551,7 @@ static void updateQueueMenu()
 
 static const UIScreen queueScreen = {
     .name = "queue",
-    .buttons = VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS | VPAD_BUTTON_X,
+    .buttons = VPAD_BUTTON_B | VPAD_BUTTON_UP | VPAD_BUTTON_DOWN | VPAD_BUTTON_LEFT | VPAD_BUTTON_RIGHT | VPAD_BUTTON_PLUS | VPAD_BUTTON_MINUS | VPAD_BUTTON_X | VPAD_BUTTON_Y,
     .enter = enterQueueMenu,
     .update = updateQueueMenu,
     .render = renderQueueMenu,
