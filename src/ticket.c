@@ -530,6 +530,14 @@ bool hasTicket(uint64_t tid)
             {
                 if(ticket->tid == tid)
                 {
+                    // Which bucket file holds the ticket of a title is the
+                    // system's own business: the names of the folders and
+                    // files follow no title ID, and one file carries the
+                    // tickets of several titles. A debug build says where
+                    // the ticket of a title turned up, the way
+                    // deleteTicket() does, so the choice of the system can
+                    // be looked at instead of guessed at.
+                    debugPrintf("Ticket of %016llX found at %s+0x%X", tid, path, (unsigned int)(((uint8_t *)ticket) - ((uint8_t *)file)));
                     found = true;
                     break;
                 }
