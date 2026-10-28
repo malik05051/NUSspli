@@ -47,8 +47,9 @@ whenever you like, and the rest of the download follows while you play.
   with it. The download stops there and continues at the next title start.
   What does download with the console switched off is the Wii U Download
   Management, which NUSspli hands titles to itself - but that one installs
-  with the ticket the console has, so it only works for titles the console is
-  entitled to, while the plugin downloads whatever NUSspli can.
+  with the ticket the console has, so it only works for titles that have one
+  there, the ones NUSspli installed included: an install leaves its ticket on
+  the console. The plugin needs none and downloads whatever NUSspli can.
 
 ## Requirements
 
