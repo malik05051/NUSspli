@@ -21,6 +21,7 @@
 #include "config.h"
 #include "downloader.h"
 #include "logger.h"
+#include "powersave.h"
 #include "tmd.h"
 
 #include <notifications/notifications.h>
@@ -429,6 +430,10 @@ static void workerMain(std::stop_token token)
         sStatus.bytesDone = 0;
     }
 
+    // Nobody is playing while this runs, which is just when the console
+    // would power itself down and cut the download short.
+    holdAutoPowerDown();
+
     char toScreen[256];
     snprintf(toScreen, sizeof(toScreen), "NUSspli: finishing %u unfinished download(s), %s to go. The progress can be seen here and in the config menu of the plugin.",
         (uint32_t)jobs.size(), formatSize(missing).c_str());
@@ -493,6 +498,7 @@ static void workerMain(std::stop_token token)
     }
 
     closeProgressNotification();
+    releaseAutoPowerDown();
 
     if(stopped)
     {
@@ -545,5 +551,6 @@ void stopBackgroundDownloads()
     // the download it was on continues from its bytes the next time.
     sWorker.reset();
     closeProgressNotification();
+    releaseAutoPowerDown();
     deinitDownloader();
 }

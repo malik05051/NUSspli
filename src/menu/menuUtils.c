@@ -463,7 +463,7 @@ static void updateFinishedDialog()
 static void renderFinishedDialog()
 {
     colorStartNewFrame(SCREEN_COLOR_D_GREEN);
-    int i = finishedOp != FINISHING_OPERATION_QUEUE ? textToFrameMultiline(0, ALIGNED_CENTER, finishedTitle, MAX_CHARS) : 0;
+    int i = finishedOp != FINISHING_OPERATION_QUEUE && finishedOp != FINISHING_OPERATION_SYSTEM_DOWNLOAD_QUEUE ? textToFrameMultiline(0, ALIGNED_CENTER, finishedTitle, MAX_CHARS) : 0;
     textToFrame(i++, 0, finishedText);
     writeScreenLog(i);
 }
@@ -521,6 +521,9 @@ void showFinishedScreen(const char *titleName, FINISHING_OPERATION op)
             break;
         case FINISHING_OPERATION_SYSTEM_DOWNLOAD:
             text = localise("Added to the Wii U Download Management!");
+            break;
+        case FINISHING_OPERATION_SYSTEM_DOWNLOAD_QUEUE:
+            text = localise("Handed to the Wii U Download Management!");
             break;
         case FINISHING_OPERATION_SYSTEM_DOWNLOAD_REMOVED:
             text = localise("Removed from the Wii U Download Management!");

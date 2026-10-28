@@ -25,6 +25,12 @@ whenever you like, and the rest of the download follows while you play.
 - When everything is in, a notification says that the downloads are finished
   and can be installed with NUSspli. That one is kept until it can be shown,
   so closing the game does not swallow it.
+- While it downloads it holds the automatic power down of the console off, so
+  a queue left to finish on the HOME Menu is not cut short by the console
+  switching itself off. The setting of the user is put back afterwards, and
+  only the value in force for this boot is touched, never the one the console
+  stores: a plugin that dies without putting it back cannot leave the console
+  unable to power itself down.
 
 ## What it does not do
 
@@ -36,6 +42,14 @@ whenever you like, and the rest of the download follows while you play.
   its own then, and two downloaders in one folder would fight over the files.
 - A download it cannot finish is not broken - the bytes stay on the SD card and
   NUSspli, or the next title start, continues where it stopped.
+- **It cannot download in standby.** A plugin is code inside the title that
+  runs, and standby runs none: the console tears the title down and the plugin
+  with it. The download stops there and continues at the next title start.
+  What does download with the console switched off is the Wii U Download
+  Management, which NUSspli hands titles to itself - but that one installs
+  with the ticket the console has, so it only works for titles that have one
+  there, the ones NUSspli installed included: an install leaves its ticket on
+  the console. The plugin needs none and downloads whatever NUSspli can.
 
 ## Requirements
 

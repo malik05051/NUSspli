@@ -48,6 +48,9 @@ extern "C"
         FINISHING_OPERATION_DOWNLOAD,
         FINISHING_OPERATION_QUEUE,
         FINISHING_OPERATION_SYSTEM_DOWNLOAD,
+        // The whole queue was handed over, so this one has no title of its
+        // own to show, the way FINISHING_OPERATION_QUEUE has none.
+        FINISHING_OPERATION_SYSTEM_DOWNLOAD_QUEUE,
         FINISHING_OPERATION_SYSTEM_DOWNLOAD_REMOVED
     } FINISHING_OPERATION;
 
