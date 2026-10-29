@@ -238,12 +238,6 @@ static int qmAskAnswer(void *ovl)
 static bool qmSystemDownload()
 {
     char txt[1024];
-    snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-        localise("Experimental: the Wii U Download Management downloads and installs\nthe titles itself, also while the console is switched off when its\nstandby functions are on. It installs to the internal memory, it needs\nthe ticket of a title on the console, and it keeps the rest here."),
-        localise("Yes"), localise("No"));
-
-    if(qmAskAnswer(uiShowOverlay(txt)) != 1)
-        return false;
 
     // Both halves of the walk below take their time - hasTicket() reads the
     // ticket bucket of the console and the registration took seconds in the

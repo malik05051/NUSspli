@@ -211,7 +211,6 @@
     "Added to the Wii U Download Management!": "Zur Wii U-Downloadverwaltung hinzugefügt!",
     "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "Für diesen Titel ist kein Ticket auf der Konsole,\ndie Wii U-Downloadverwaltung wird ihn vermutlich nicht installieren können.\n\nTrotzdem hinzufügen?",
     "The Wii U Download Management refused the title.": "Die Wii U-Downloadverwaltung hat den Titel abgelehnt.",
-    "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?": "Experimentell: Die Wii U-Downloadverwaltung lädt und installiert\ndiesen Titel selbst, wenn die Server von Nintendo noch alle Daten dazu haben.\n\nFortfahren?",
     "It is already in the Download Management.\nClear it there first.": "Er ist bereits in der Downloadverwaltung.\nLösche ihn dort zuerst.",
     "It is already installed.": "Er ist bereits installiert.",
     "A file of this title is no longer on the servers of Nintendo.": "Eine Datei dieses Titels ist nicht mehr auf den Servern von Nintendo.",

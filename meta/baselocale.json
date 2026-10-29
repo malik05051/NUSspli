@@ -226,7 +226,6 @@
     "There is no ticket for this title to be had.": "There is no ticket for this title to be had.",
     "Could not put a ticket on the console.\nThe ticket store was left the way it was.": "Could not put a ticket on the console.\nThe ticket store was left the way it was.",
     "It stays in the queue, NUSspli downloads it itself.": "It stays in the queue, NUSspli downloads it itself.",
-    "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?": "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?",
     "It is already in the Download Management.\nClear it there first.": "It is already in the Download Management.\nClear it there first.",
     "It is already installed.": "It is already installed.",
     "A file of this title is no longer on the servers of Nintendo.": "A file of this title is no longer on the servers of Nintendo.",
@@ -237,6 +236,5 @@
     "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nDownload and install it with NUSspli in the background instead?\nNUSspli installs the ticket with it.": "There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nDownload and install it with NUSspli in the background instead?\nNUSspli installs the ticket with it.",
 
     "\uE003 Download Management": "\uE003 Download Management",
-    "Experimental: the Wii U Download Management downloads and installs\nthe titles itself, also while the console is switched off when its\nstandby functions are on. It installs to the internal memory, it needs\nthe ticket of a title on the console, and it keeps the rest here.": "Experimental: the Wii U Download Management downloads and installs\nthe titles itself, also while the console is switched off when its\nstandby functions are on. It installs to the internal memory, it needs\nthe ticket of a title on the console, and it keeps the rest here.",
     "The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself.": "The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself."
 }

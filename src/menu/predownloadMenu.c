@@ -683,19 +683,7 @@ void systemDownloadsInfo()
 static bool pdSystemDownload()
 {
     char txt[1024];
-
-    snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-        localise("Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?"),
-        localise("Yes"), localise("No"));
-    int ans = pdAskAnswer(uiShowOverlay(txt));
-    if(ans < 0)
-    {
-        pdFinish(0);
-        return false;
-    }
-
-    if(ans == 0)
-        return false; // back to the settings
+    int ans;
 
     // An update without its ticket on the console downloads in the Wii U
     // Download Management but does not install (105-3683). NUSspli's own
