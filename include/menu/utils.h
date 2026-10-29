@@ -64,6 +64,10 @@ extern "C"
     void drawErrorFrame(const char *text, ErrorOptions option);
     void drawErrorFrameContent(const char *text, ErrorOptions option);
     ErrorOptions showErrorDialog(const char *text, ErrorOptions option);
+    // Shows msg as an overlay on the frame below and blocks until the user
+    // picked an answer. False on B or when the overlay could not be made.
+    // The buttons belong in msg, the way the brick warnings write them.
+    bool askYesNo(const char *msg);
     void showErrorFrame(const char *text);
     bool checkSystemTitle(uint64_t tid, MCPRegion region, bool deinstall);
     bool checkSystemTitleFromEntry(const TitleEntry *entry, bool deinstall);
