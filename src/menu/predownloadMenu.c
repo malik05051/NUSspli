@@ -786,7 +786,9 @@ static bool pdSystemDownload()
         return false;
     }
 
-    res = nimRegisterTitle(pdTmd->tid, pdTmd->title_version, NULL);
+    NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
+    nimMakeConfig(&config, pdTmd->tid, pdTmd->title_version);
+    res = nimRegister(&config, pdTmd->tid);
     if(NNResult_IsFailure(res))
     {
         // A task that is there already can be taken out again. That is
