@@ -21,6 +21,40 @@ does not exist, because NUSspli left the version in the task config at 0. Since
 that fix the mirror is a fallback for a file the secure server really lost, and
 a way to see what the Download Management fetches.
 
+## The icon of a title: 105-1017
+
+Before the Download Management takes a title at all it fetches the icon of it
+from `https://idbe-wup.cdn.nintendo.net/icondata/<2 hex>/<title ID>.idbe`
+(see [nn_idbe.rpl](https://wiiubrew.org/wiki/Nn_idbe.rpl)). A title whose icon
+Nintendo dropped fails there with **105-1017** and nothing is downloaded, no
+matter what the ticket situation is: the icon is fetched first.
+
+So the mirror answers that host too. Point `idbe-wup.cdn.nintendo.net` at it
+the way `ccs.wup.shop.nintendo.net` is pointed at it, and it passes the
+request on to Nintendo like everything else.
+
+For a title they no longer have, `--idbe-dir` names a folder of `.idbe` files
+that answer where the servers do not:
+
+```
+--idbe-dir /etc/ccs-mirror/icons
+```
+
+A file is looked up under the name the console asked for, so the icon of
+`0005000010101D00` is `0005000010101D00.idbe` in that folder, and a console
+asking for a version wants `0005000010101D00-16.idbe`. The upstream wins
+whenever it answers, so the folder only fills the holes.
+
+Two things this does not answer:
+
+- **Where the file comes from.** Any `.idbe` of that title, from a console
+  that still has it or from an archive. The mirror serves the bytes, it does
+  not make them.
+- **Whether the console minds an icon of another title.** Serving a different
+  title's `.idbe` to get past 105-1017 was not tried here. If the system only
+  needs the fetch to succeed it works and shows the wrong picture; if it
+  checks the title ID inside, it does not.
+
 ## What it does not do
 
 It only passes on what the public CDN gives to anyone:
