@@ -34,6 +34,7 @@
 #include <utils.h>
 
 #pragma GCC diagnostic ignored "-Wundef"
+#include <coreinit/mcp.h>
 #include <coreinit/memdefaultheap.h>
 #pragma GCC diagnostic pop
 
@@ -116,6 +117,23 @@ static bool findPendingInstall(char *path, size_t size)
         path[len] = '\0';
         if(tmd == NULL)
             continue;
+
+        /*
+         * A folder whose title is on the console already is no download
+         * that waits for its install: the install keeps the files of an SD
+         * card download by default, so the folder stays behind and the
+         * question would come back on every boot. The version decides,
+         * else an update that is newer than the installed one would be
+         * taken for one that is already in.
+         */
+        MCPTitleListType installed __attribute__((__aligned__(0x40)));
+        if(MCP_GetTitleInfo(mcpHandle, tmd->tid, &installed) == 0 && installed.titleVersion >= tmd->title_version)
+        {
+            debugPrintf("Already installed: %s", path);
+            MEMFreeToDefaultHeap(tmd);
+            path[len] = '\0';
+            continue;
+        }
 
         found = tmd->num_contents != 0 && downloadComplete(path, len, tmd);
         MEMFreeToDefaultHeap(tmd);
