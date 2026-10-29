@@ -560,25 +560,7 @@ static void pdNimRefused(NNResult res)
     // press is reported once, so reading it here takes it away from it.
     readInput();
 
-    const char *reason = NULL;
-    if(code / 10000 == 105)
-    {
-        switch(code % 10000)
-        {
-            case 583: // TITLE_PACKAGE_ALREADY_REGISTERED
-                reason = "It is already in the Download Management.\nClear it there first.";
-                break;
-            case 601: // NEW_TITLE_ALREADY_EXISTS
-                reason = "It is already installed.";
-                break;
-            case 955: // BOSS_HTTP_ERROR_404_NOT_FOUND
-                reason = "A file of this title is no longer on the servers of Nintendo.";
-                break;
-            case 1017: // IDBE_FAILED_TO_DOWNLOAD
-                reason = "The icon of this title is no longer on the servers of Nintendo.";
-                break;
-        }
-    }
+    const char *reason = nimErrorReason(code);
 
     char txt[512];
     if(code >= 1000000)
