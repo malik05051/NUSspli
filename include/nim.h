@@ -79,7 +79,6 @@ extern "C"
     // NNResult stops the handoff on a failure, and nimFinalize() closes
     // what nimInitialize() opened.
     NNResult nimInitialize();
-    void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version);
     // What the Download Management holds: up to max title IDs, each with
     // the info block of its package (0x50 bytes in Cemu), and how many.
 #define NIM_PACKAGE_INFO_SIZE 0x50
@@ -94,8 +93,14 @@ extern "C"
     // Removes a package from the Download Management, with what it has
     // downloaded so far. Takes the ID of the package, see nimFindPackage().
     NNResult nimUnregister(uint64_t packageId);
-    // The system picks the contents of the title itself.
-    NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid);
+    // IDBE_FAILED_TO_DOWNLOAD: the system did not get the icon of the title,
+    // which it fetches before it takes the task. See nimRegisterTitle().
+#define NIM_ERROR_IDBE_DOWNLOAD 1051017
+    // Hands a title to the Download Management, which picks the contents of
+    // it itself. Tries the icon of the title when the one of the version is
+    // missing, see nim.c, and writes the error of a failure to code when
+    // that is not NULL.
+    NNResult nimRegisterTitle(uint64_t tid, uint16_t version, int32_t *code);
 
     // The error code the system shows its users for a result (105-0583 is
     // 1050583), between nimInitialize() and nimFinalize().

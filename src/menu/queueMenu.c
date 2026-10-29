@@ -259,7 +259,6 @@ static bool qmSystemDownload()
         return false;
     }
 
-    NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
     size_t total = getListSize(titleQueue);
     size_t handed = 0;
     size_t kept = 0;
@@ -291,11 +290,9 @@ static bool qmSystemDownload()
             continue;
         }
 
-        nimMakeConfig(&config, tid, tver);
-        res = nimRegister(&config, tid);
+        res = nimRegisterTitle(tid, tver, &lastCode);
         if(NNResult_IsFailure(res))
         {
-            lastCode = nimErrorCode(res);
             ++refused;
             continue;
         }
