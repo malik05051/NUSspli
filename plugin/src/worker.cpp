@@ -27,11 +27,15 @@
 #include <notifications/notifications.h>
 #include <rpxloader/rpxloader.h>
 
+#include <wups/button_combo/api.h>
+#include <wups/button_combo/defines.h>
+
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <forward_list>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -90,6 +94,19 @@ static BackgroundStatus sStatus = {
 
 static NotificationModuleHandle sNotification = 0;
 static bool sNotificationOpen = false;
+
+/*
+ * The line that says the download is done is the one thing the user has to
+ * act on - the plugin downloads, NUSspli installs - so it stays on screen
+ * until they take it away with PLUS instead of fading while they are
+ * looking at the game. The combo that hides it is never taken away from
+ * inside its own callback: it goes when the title ends or the next run
+ * starts, which both happen on the main thread.
+ */
+static std::mutex sDoneLock;
+static NotificationModuleHandle sDone = 0;
+static bool sDoneOpen = false;
+static std::forward_list<WUPSButtonComboAPI::ButtonCombo> sDoneCombos;
 
 BackgroundStatus getBackgroundStatus()
 {
@@ -208,6 +225,61 @@ static void closeProgressNotification()
 
     NotificationModule_FinishDynamicNotification(sNotification, 0.0f);
     sNotificationOpen = false;
+}
+
+static void onDismissPressed(WUPSButtonCombo_ControllerTypes, WUPSButtonCombo_ComboHandle, void *)
+{
+    std::lock_guard<std::mutex> lock(sDoneLock);
+    if(!sDoneOpen)
+        return;
+
+    NotificationModule_FinishDynamicNotification(sDone, 0.0f);
+    sDoneOpen = false;
+}
+
+static void closeDoneNotification()
+{
+    std::lock_guard<std::mutex> lock(sDoneLock);
+    if(sDoneOpen)
+    {
+        NotificationModule_FinishDynamicNotification(sDone, 0.0f);
+        sDoneOpen = false;
+    }
+
+    sDoneCombos.clear();
+}
+
+// The notification that waits for PLUS. Falls back to one that fades when
+// it cannot be opened or when PLUS cannot be taken: a line that stays with
+// no way to take it away would be worse than one that goes by itself.
+static void showDone(const char *text)
+{
+    if(!gNotify)
+        return;
+
+    std::lock_guard<std::mutex> lock(sDoneLock);
+    if(NotificationModule_AddDynamicNotificationEx(text, &sDone, { 255, 255, 255, 255 }, { 0, 110, 0, 255 }, nullptr, nullptr, true) != NOTIFICATION_MODULE_RESULT_SUCCESS)
+    {
+        debugPrintf("Can't open the notification that stays, showing one that fades");
+        showInfo(text);
+        return;
+    }
+
+    sDoneOpen = true;
+
+    WUPSButtonCombo_ComboStatus status;
+    WUPSButtonCombo_Error err;
+    auto combo = WUPSButtonComboAPI::CreateComboPressDownObserver("NUSspli Background Downloads: hide the finished notification",
+        WUPS_BUTTON_COMBO_BUTTON_PLUS, onDismissPressed, nullptr, status, err);
+    if(combo && err == WUPS_BUTTON_COMBO_ERROR_SUCCESS && status == WUPS_BUTTON_COMBO_COMBO_STATUS_VALID)
+    {
+        sDoneCombos.push_front(std::move(*combo));
+        return;
+    }
+
+    debugPrintf("Can't take PLUS: %s", WUPSButtonComboAPI_GetStatusStr(err));
+    NotificationModule_FinishDynamicNotification(sDone, NOTIFICATION_SECONDS);
+    sDoneOpen = false;
 }
 
 static uint64_t fileSize(const std::string &path)
@@ -517,8 +589,8 @@ static void workerMain(std::stop_token token)
     }
 
     setState(BACKGROUND_STATE_FINISHED);
-    snprintf(toScreen, sizeof(toScreen), "NUSspli: the background download of %u title(s) is finished. Install them with NUSspli.", done);
-    showInfo(toScreen);
+    snprintf(toScreen, sizeof(toScreen), "NUSspli: the background download of %u title(s) is finished. Open NUSspli to install it. Press + to hide this.", done);
+    showDone(toScreen);
     debugPrintf("Finished %u downloads", done);
 }
 
@@ -551,6 +623,7 @@ void stopBackgroundDownloads()
     // the download it was on continues from its bytes the next time.
     sWorker.reset();
     closeProgressNotification();
+    closeDoneNotification();
     releaseAutoPowerDown();
     deinitDownloader();
 }

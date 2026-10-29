@@ -23,8 +23,10 @@ whenever you like, and the rest of the download follows while you play.
   progress can be seen - the progress itself is a notification that stays on
   screen and counts up, and the config menu of the plugin shows the same line.
 - When everything is in, a notification says that the downloads are finished
-  and can be installed with NUSspli. That one is kept until it can be shown,
-  so closing the game does not swallow it.
+  and that NUSspli installs them. That one does not fade: the install is the
+  one thing left to do, so it stays on screen until it is hidden with PLUS.
+  It goes by itself when the title ends, and NUSspli asks about the finished
+  download the next time it starts, so nothing is lost either way.
 - While it downloads it holds the automatic power down of the console off, so
   a queue left to finish on the HOME Menu is not cut short by the console
   switching itself off. The setting of the user is put back afterwards, and
