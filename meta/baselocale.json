@@ -222,6 +222,7 @@
     "A download in the install folder of the SD card is finished but not\ninstalled: the background plugin downloads, the install stays with\nNUSspli.\n\nOpen the installer?": "A download in the install folder of the SD card is finished but not\ninstalled: the background plugin downloads, the install stays with\nNUSspli.\n\nOpen the installer?",
     "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?": "There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?",
     "The Wii U Download Management refused the title.": "The Wii U Download Management refused the title.",
+    "It stays in the queue, NUSspli downloads it itself.": "It stays in the queue, NUSspli downloads it itself.",
     "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?": "Experimental: the Wii U Download Management downloads and installs\nthis title itself, if the servers of Nintendo still have all of its data.\n\nContinue?",
     "It is already in the Download Management.\nClear it there first.": "It is already in the Download Management.\nClear it there first.",
     "It is already installed.": "It is already installed.",

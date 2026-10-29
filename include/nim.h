@@ -100,6 +100,13 @@ extern "C"
     // The error code the system shows its users for a result (105-0583 is
     // 1050583), between nimInitialize() and nimFinalize().
     int32_t nimErrorCode(NNResult res);
+    /*
+     * What a code of the Download Management means, in the English the
+     * caller hands to localise(), or NULL for a code with nothing written
+     * down about it. The names behind the codes are the ones WiiUBrew
+     * lists for them.
+     */
+    const char *nimErrorReason(int32_t code);
     void nimFinalize();
 
 #ifdef __cplusplus

@@ -316,7 +316,11 @@ static bool qmSystemDownload()
 
     if(refused != 0)
     {
-        snprintf(txt, sizeof(txt), "%s\n\n%03d-%04d", localise("The Wii U Download Management refused the title."), (int)(lastCode / 10000), (int)(lastCode % 10000));
+        const char *reason = nimErrorReason(lastCode);
+        snprintf(txt, sizeof(txt), "%s\n\n%s%s%03d-%04d\n\n%s", localise("The Wii U Download Management refused the title."),
+            reason == NULL ? "" : localise(reason), reason == NULL ? "" : "\n\n",
+            (int)(lastCode / 10000), (int)(lastCode % 10000),
+            localise("It stays in the queue, NUSspli downloads it itself."));
         showErrorFrame(txt);
     }
 

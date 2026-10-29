@@ -198,6 +198,26 @@ int32_t nimErrorCode(NNResult res)
     return code;
 }
 
+const char *nimErrorReason(int32_t code)
+{
+    if(code / 10000 != 105)
+        return NULL;
+
+    switch(code % 10000)
+    {
+        case 583: // TITLE_PACKAGE_ALREADY_REGISTERED
+            return "It is already in the Download Management.\nClear it there first.";
+        case 601: // NEW_TITLE_ALREADY_EXISTS
+            return "It is already installed.";
+        case 955: // BOSS_HTTP_ERROR_404_NOT_FOUND
+            return "A file of this title is no longer on the servers of Nintendo.";
+        case 1017: // IDBE_FAILED_TO_DOWNLOAD
+            return "The icon of this title is no longer on the servers of Nintendo.";
+    }
+
+    return NULL;
+}
+
 void nimFinalize()
 {
     debugPrintf("NIM: Finalize()");
