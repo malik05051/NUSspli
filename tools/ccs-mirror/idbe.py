@@ -1,9 +1,11 @@
 """The icon of a title, made here instead of found.
 
 The Download Management fetches the icon of a title before it takes the
-title at all, so a title whose icon Nintendo dropped fails with 105-1017
-and nothing is downloaded. The format is written down (see the README), so
-an icon that the console accepts can be made for any title ID.
+title at all, so a title whose icon it does not get fails with 105-1017
+and nothing is downloaded. Nintendo still serves those icons, and a console
+that cannot get one is usually asking the wrong server (see the README), so
+this is for the case where the icon really is gone. The format is written
+down, so an icon that the console accepts can be made for any title ID.
 
 The AES of the format is 128 bit CBC. It is written out below instead of
 taken from a library so that the mirror keeps running on a machine with

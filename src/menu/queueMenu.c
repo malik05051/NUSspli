@@ -183,49 +183,6 @@ static void renderQueueMenu()
     textToFrame(MAX_LINES - 1, ALIGNED_CENTER, toScreen);
 }
 
-// The A/B question of the handoff below stays an overlay on the frame of
-// the queue, the way the pre-download screen asks its questions.
-static void *qmOverlay;
-
-static void updateQMAsk()
-{
-    if(vpad.trigger & VPAD_BUTTON_B)
-        uiPop();
-    else if(vpad.trigger & VPAD_BUTTON_A)
-    {
-        uiSetResult(1);
-        uiPop();
-    }
-}
-
-static void leaveQMAsk()
-{
-    uiHideOverlay(qmOverlay);
-    qmOverlay = NULL;
-}
-
-static const UIScreen qmAskScreen = {
-    .name = "queue question",
-    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B,
-    .update = updateQMAsk,
-    .leave = leaveQMAsk,
-};
-
-// Returns 1 on A, 0 on B and -1 when there is no overlay or the app
-// stopped. The overlay is gone when this returns.
-static int qmAskAnswer(void *ovl)
-{
-    if(ovl == NULL)
-        return -1;
-
-    qmOverlay = ovl;
-    int ret = uiModal(&qmAskScreen, NULL);
-    if(!AppRunning(true))
-        return -1;
-
-    return ret;
-}
-
 /*
  * Hands the entries the system can take to the Wii U Download Management,
  * which downloads and installs them itself - in its own background and,
@@ -238,12 +195,6 @@ static int qmAskAnswer(void *ovl)
 static bool qmSystemDownload()
 {
     char txt[1024];
-    snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-        localise("Experimental: the Wii U Download Management downloads and installs\nthe titles itself, also while the console is switched off when its\nstandby functions are on. It installs to the internal memory, it needs\nthe ticket of a title on the console, and it keeps the rest here."),
-        localise("Yes"), localise("No"));
-
-    if(qmAskAnswer(uiShowOverlay(txt)) != 1)
-        return false;
 
     // Both halves of the walk below take their time - hasTicket() reads the
     // ticket bucket of the console and the registration took seconds in the
@@ -259,6 +210,7 @@ static bool qmSystemDownload()
         return false;
     }
 
+    NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
     size_t total = getListSize(titleQueue);
     size_t handed = 0;
     size_t kept = 0;
@@ -290,9 +242,11 @@ static bool qmSystemDownload()
             continue;
         }
 
-        res = nimRegisterTitle(tid, tver, &lastCode);
+        nimMakeConfig(&config, tid, tver);
+        res = nimRegister(&config, tid);
         if(NNResult_IsFailure(res))
         {
+            lastCode = nimErrorCode(res);
             ++refused;
             continue;
         }

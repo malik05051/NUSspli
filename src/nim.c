@@ -63,7 +63,7 @@ NNResult nimInitialize()
 // title type of 0 and a region of 0. Cemu only stubs it, so whatever it
 // checks or reads on a console is unknown: the config is filled here the
 // way Cemu fills it instead, which is what the eShop runs with in Cemu.
-static void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version)
+void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version)
 {
     OSBlockSet(config, 0, sizeof(NimTitlePackageTaskConfig));
     config->titleIdHigh = (uint32_t)(tid >> 32);
@@ -101,61 +101,12 @@ static void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint1
 // The contents are left to the system: the content list of the TMD was
 // refused as a usage error (0xC0512E80) on a 5.5.5E console, with and
 // without the right title type, while no list got past that check.
-static NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid)
+NNResult nimRegister(const NimTitlePackageTaskConfig *config, uint64_t tid)
 {
     (void)tid; // Only read by the debug log
     debugPrintf("NIM: RegisterTitlePackageTask(%016llX, no contents)", tid);
     NNResult res = NIMRegisterTitlePackageTask(config, NULL, 0);
     debugPrintf("NIM: RegisterTitlePackageTask() returned %#010x", res.value);
-    return res;
-}
-
-/*
- * Hands a title over, with the icon of the system in mind.
- *
- * Before the system takes a task at all it fetches the icon of the title
- * from idbe-wup.cdn.nintendo.net, as <title ID>.idbe or, when the config
- * names a version, as <title ID>-<version>.idbe. Only the first of the two
- * is the icon every title has: the icon of a version exists where that
- * version shipped one of its own, so a version in the config can cost a
- * title the icon that sits on the server under its title ID, and the
- * handoff ends in 105-1017 while nothing is wrong with the title.
- *
- * Leaving the version out of every config is no answer either: the system
- * builds the address of the TMD from it as well, and a config carrying 0
- * fetched tmd.0 of an update that has no such version, which was the 404
- * behind 105-0955 (see nimMakeConfig()).
- *
- * So the version goes in first and an icon the system did not get is the
- * one refusal that is tried again without it. Every other refusal is the
- * answer. When the second try fails as well the first error is reported:
- * it is the one that belongs to the config the title asked for.
- *
- * code takes the error the caller shows for a failure, when it is not NULL.
- */
-NNResult nimRegisterTitle(uint64_t tid, uint16_t version, int32_t *code)
-{
-    NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
-
-    nimMakeConfig(&config, tid, version);
-    NNResult res = nimRegister(&config, tid);
-    if(!NNResult_IsFailure(res))
-        return res;
-
-    int32_t first = nimErrorCode(res);
-    if(code != NULL)
-        *code = first;
-
-    if(first != NIM_ERROR_IDBE_DOWNLOAD || version == 0)
-        return res;
-
-    debugPrintf("NIM: no icon for version %u, asking for the icon of the title", version);
-    nimMakeConfig(&config, tid, 0);
-    NNResult retry = nimRegister(&config, tid);
-    if(!NNResult_IsFailure(retry))
-        return retry;
-
-    debugPrintf("NIM: without the version it is %d", nimErrorCode(retry));
     return res;
 }
 
@@ -261,7 +212,12 @@ const char *nimErrorReason(int32_t code)
         case 955: // BOSS_HTTP_ERROR_404_NOT_FOUND
             return "A file of this title is no longer on the servers of Nintendo.";
         case 1017: // IDBE_FAILED_TO_DOWNLOAD
-            return "The icon of this title is no longer on the servers of Nintendo.";
+            // The icon is fetched before the title is taken, and Nintendo
+            // still answers for it. A console that does not get one is
+            // usually asking somewhere else: Inkay patches the icon server
+            // out of nim-boss, and the one it writes there has no icons, so
+            // every handoff fails while that plugin is loaded.
+            return "The icon of this title could not be downloaded.\nA Pretendo install (Inkay) redirects the icon server of Nintendo,\nso turn that plugin off and try again.";
     }
 
     return NULL;

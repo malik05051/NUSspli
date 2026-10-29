@@ -47,11 +47,19 @@ whenever you like, and the rest of the download follows while you play.
 - **It cannot download in standby.** A plugin is code inside the title that
   runs, and standby runs none: the console tears the title down and the plugin
   with it. The download stops there and continues at the next title start.
-  What does download with the console switched off is the Wii U Download
-  Management, which NUSspli hands titles to itself - but that one installs
-  with the ticket the console has, so it only works for titles that have one
-  there, the ones NUSspli installed included: an install leaves its ticket on
-  the console. The plugin needs none and downloads whatever NUSspli can.
+  What does download and install with the console switched off is the Wii U
+  Download Management, which NUSspli hands titles to itself (X in the
+  predownload menu, Y in the queue). That one installs with the ticket the
+  console has, and NUSspli puts one there for a title that has none, so it
+  reaches titles nobody bought as well: a 5.5.5E console downloaded and
+  installed them in standby.
+
+  Two things to know when a handoff is refused with 105-1017. The icon of the
+  title is fetched before anything else, and a Pretendo install patches that
+  server out of nim-boss (see `tools/ccs-mirror/README.md`), so every handoff
+  fails while the plugin is loaded. And the Download Management always installs
+  to the internal memory. The plugin here needs neither a ticket nor an icon
+  and downloads whatever NUSspli can, wherever NUSspli puts it.
 
 ## Requirements
 

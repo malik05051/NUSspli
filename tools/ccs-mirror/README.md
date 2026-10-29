@@ -26,15 +26,32 @@ a way to see what the Download Management fetches.
 Before the Download Management takes a title at all it fetches the icon of it
 from `https://idbe-wup.cdn.nintendo.net/icondata/<2 hex>/<title ID>.idbe`
 (see [nn_idbe.rpl](https://wiiubrew.org/wiki/Nn_idbe.rpl)). A title whose icon
-Nintendo dropped fails there with **105-1017** and nothing is downloaded, no
-matter what the ticket situation is: the icon is fetched first.
+it does not get fails with **105-1017** and nothing is downloaded, no matter
+what the ticket situation is: the icon is fetched first.
 
-So the mirror answers that host too. Point `idbe-wup.cdn.nintendo.net` at it
-the way `ccs.wup.shop.nintendo.net` is pointed at it, and it passes the
-request on to Nintendo like everything else.
+### Look at the console before you look at the server
 
-For a title they no longer have, `--idbe-dir` names a folder of `.idbe` files
-that answer where the servers do not:
+**A missing icon is rarely the cause.** Nintendo still serves that host today:
+it answers on TLS 1.0 with a certificate of its own CA, the one every Wii U
+trusts, and the icon of a title comes down from it in a browser.
+
+What fails is the console asking somewhere else. A Pretendo install patches
+the icon server out of nim-boss - `src/iosu_url_patches.h` of
+[Inkay](https://github.com/PretendoNetwork/Inkay) writes
+`idbe-wup.cdn.pretendo.cc` over it - and that server has no icons, so **every**
+handoff ends in 105-1017 while Nintendo has the icon all along. A 5.5.5E
+console showed exactly that: a paid title and a demo both refused, and both
+went through once the plugin was out of the way. The content server (`ccs`) is
+not among the patched URLs, so only the icon is affected.
+
+Turning the plugin off for the handoff is the whole fix there. The two options
+below are for a title whose icon really is gone, which is a case that has not
+been seen yet.
+
+### An icon out of a folder
+
+`--idbe-dir` names a folder of `.idbe` files that answer where the servers do
+not:
 
 ```
 --idbe-dir /etc/ccs-mirror/icons
@@ -81,9 +98,10 @@ It only passes on what the public CDN gives to anyone:
 - the ticket (`cetk`) of free content such as updates.
 
 A title you have to buy gets no ticket from here: the CDN answers 404 for it,
-just like before. The Download Management still installs games only with the
-ticket the console already has. The mirror only fixes files that went missing
-from the secure server.
+just like before. The Download Management installs with the ticket the console
+has, which for a title nobody bought is the one NUSspli puts there itself (X in
+the predownload menu). The mirror only fixes files that went missing from the
+secure server.
 
 ## How the console trusts it
 
