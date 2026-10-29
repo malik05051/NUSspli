@@ -183,49 +183,6 @@ static void renderQueueMenu()
     textToFrame(MAX_LINES - 1, ALIGNED_CENTER, toScreen);
 }
 
-// The A/B question of the handoff below stays an overlay on the frame of
-// the queue, the way the pre-download screen asks its questions.
-static void *qmOverlay;
-
-static void updateQMAsk()
-{
-    if(vpad.trigger & VPAD_BUTTON_B)
-        uiPop();
-    else if(vpad.trigger & VPAD_BUTTON_A)
-    {
-        uiSetResult(1);
-        uiPop();
-    }
-}
-
-static void leaveQMAsk()
-{
-    uiHideOverlay(qmOverlay);
-    qmOverlay = NULL;
-}
-
-static const UIScreen qmAskScreen = {
-    .name = "queue question",
-    .buttons = VPAD_BUTTON_A | VPAD_BUTTON_B,
-    .update = updateQMAsk,
-    .leave = leaveQMAsk,
-};
-
-// Returns 1 on A, 0 on B and -1 when there is no overlay or the app
-// stopped. The overlay is gone when this returns.
-static int qmAskAnswer(void *ovl)
-{
-    if(ovl == NULL)
-        return -1;
-
-    qmOverlay = ovl;
-    int ret = uiModal(&qmAskScreen, NULL);
-    if(!AppRunning(true))
-        return -1;
-
-    return ret;
-}
-
 /*
  * Hands the entries the system can take to the Wii U Download Management,
  * which downloads and installs them itself - in its own background and,
