@@ -47,11 +47,15 @@ import re
 import socketserver
 import ssl
 import sys
+import os
 import urllib.error
 import urllib.request
 import warnings
 
 UPSTREAM = "http://ccs.cdn.wup.shop.nintendo.net/ccs/download/"
+# The icon of a title, which the Download Management fetches before it takes
+# the title at all: a 404 here is 105-1017 and nothing is downloaded.
+IDBE_UPSTREAM = "https://idbe-wup.cdn.nintendo.net/icondata/"
 USER_AGENT = "NUSspli-ccs-mirror"
 CHUNK = 64 * 1024
 
@@ -60,6 +64,12 @@ CHUNK = 64 * 1024
 # console asks for that this does not know shows up in the log.
 PATH_RE = re.compile(
     r"^/ccs/download/([0-9a-fA-F]{16})/(tmd(?:\.[0-9]{1,5})?|cetk|[0-9a-fA-F]{8}(?:\.h3)?)$"
+)
+
+# The icon: two hex digits of the title ID, then the title ID with or without
+# its version. See https://wiiubrew.org/wiki/Nn_idbe.rpl for the template.
+IDBE_PATH_RE = re.compile(
+    r"^/icondata/([0-9a-fA-F]{2})/([0-9a-fA-F]{16}(?:-[0-9]{1,5})?\.idbe)$"
 )
 
 log = logging.getLogger("ccs-mirror")
@@ -72,6 +82,7 @@ class MirrorHandler(http.server.BaseHTTPRequestHandler):
     # Set from the command line in main().
     allowed = []
     timeout_s = 60
+    idbe_dir = None
 
     def log_message(self, fmt, *args):
         # The default logger writes every request to stderr unformatted, the
@@ -90,6 +101,30 @@ class MirrorHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    # An icon the servers of Nintendo no longer have, taken from the folder
+    # the mirror was started with. Returns False when there is none, so the
+    # answer stays the 404 the upstream gave.
+    def _serve_idbe_file(self, head, name, path):
+        if self.idbe_dir is None:
+            return False
+
+        local = os.path.join(self.idbe_dir, os.path.basename(name))
+        try:
+            with open(local, "rb") as f:
+                body = f.read()
+        except OSError:
+            return False
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if not head:
+            self.wfile.write(body)
+
+        log.info("%s %s %s -> 200 (%d bytes, from %s)", self.client_address[0], self.command, path, len(body), local)
+        return True
+
     def _serve(self, head):
         if not self._client_allowed():
             log.warning("%s %s %s -> 403 (client not allowed)", self.client_address[0], self.command, self.path)
@@ -99,14 +134,19 @@ class MirrorHandler(http.server.BaseHTTPRequestHandler):
         # The console may add a query string, the path alone decides.
         path = self.path.split("?", 1)[0]
         match = PATH_RE.match(path)
-        if match is None:
-            log.warning("%s %s %s -> 404 (unknown path)", self.client_address[0], self.command, self.path)
-            self._reply_empty(404)
-            return
+        idbe = None
+        if match is not None:
+            url = UPSTREAM + match.group(1).upper() + "/" + match.group(2)
+        else:
+            match = IDBE_PATH_RE.match(path)
+            if match is None:
+                log.warning("%s %s %s -> 404 (unknown path)", self.client_address[0], self.command, self.path)
+                self._reply_empty(404)
+                return
 
-        tid = match.group(1).upper()
-        name = match.group(2)
-        url = UPSTREAM + tid + "/" + name
+            idbe = match.group(2)
+            url = IDBE_UPSTREAM + match.group(1) + "/" + idbe
+
         request = urllib.request.Request(url, method="HEAD" if head else "GET")
         request.add_header("User-Agent", USER_AGENT)
         # The console resumes interrupted downloads with a range.
@@ -117,10 +157,18 @@ class MirrorHandler(http.server.BaseHTTPRequestHandler):
         try:
             upstream = urllib.request.urlopen(request, timeout=self.timeout_s)
         except urllib.error.HTTPError as e:
+            # The icon of a title Nintendo dropped is what 105-1017 is about:
+            # the folder of icons answers where the servers no longer do.
+            if idbe is not None and self._serve_idbe_file(head, idbe, path):
+                return
+
             log.info("%s %s %s -> %d (upstream)", self.client_address[0], self.command, path, e.code)
             self._reply_empty(e.code)
             return
         except (urllib.error.URLError, OSError) as e:
+            if idbe is not None and self._serve_idbe_file(head, idbe, path):
+                return
+
             log.error("%s %s %s -> 502 (%s)", self.client_address[0], self.command, path, e)
             self._reply_empty(502)
             return
@@ -184,12 +232,14 @@ def main():
     parser.add_argument("--port", type=int, default=443, help="port to listen on (default: 443)")
     parser.add_argument("--allow", default="", help="comma separated IPs or networks allowed to connect (default: everyone)")
     parser.add_argument("--timeout", type=int, default=60, help="upstream timeout in seconds (default: 60)")
+    parser.add_argument("--idbe-dir", help="folder of .idbe icons to answer with when Nintendo no longer has one (105-1017)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     MirrorHandler.allowed = [ipaddress.ip_network(n.strip(), strict=False) for n in args.allow.split(",") if n.strip()]
     MirrorHandler.timeout_s = args.timeout
+    MirrorHandler.idbe_dir = args.idbe_dir
 
     try:
         ctx = make_context(args.cert, args.key)
@@ -201,7 +251,8 @@ def main():
     # The handshake runs on the first read, in the thread of the request: a
     # slow client cannot hold up the others.
     server.socket = ctx.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
-    log.info("Listening on %s:%d, upstream %s, allowed: %s", args.bind, args.port, UPSTREAM,
+    log.info("Listening on %s:%d, upstream %s and %s, icons from %s, allowed: %s", args.bind, args.port,
+             UPSTREAM, IDBE_UPSTREAM, args.idbe_dir or "the servers of Nintendo only",
              ", ".join(str(n) for n in MirrorHandler.allowed) or "everyone")
     try:
         server.serve_forever()
