@@ -212,7 +212,12 @@ const char *nimErrorReason(int32_t code)
         case 955: // BOSS_HTTP_ERROR_404_NOT_FOUND
             return "A file of this title is no longer on the servers of Nintendo.";
         case 1017: // IDBE_FAILED_TO_DOWNLOAD
-            return "The icon of this title is no longer on the servers of Nintendo.";
+            // The icon is fetched before the title is taken, and Nintendo
+            // still answers for it. A console that does not get one is
+            // usually asking somewhere else: Inkay patches the icon server
+            // out of nim-boss, and the one it writes there has no icons, so
+            // every handoff fails while that plugin is loaded.
+            return "The icon of this title could not be downloaded.\nA Pretendo install (Inkay) redirects the icon server of Nintendo,\nso turn that plugin off and try again.";
     }
 
     return NULL;
