@@ -62,7 +62,9 @@ import idbe
 
 UPSTREAM = "http://ccs.cdn.wup.shop.nintendo.net/ccs/download/"
 # The icon of a title, which the Download Management fetches before it takes
-# the title at all: a 404 here is 105-1017 and nothing is downloaded.
+# the title at all: a 404 here is 105-1017 and nothing is downloaded. Nintendo
+# still answers for it, so a console that fails here is usually asking another
+# server, see README.md.
 IDBE_UPSTREAM = "https://idbe-wup.cdn.nintendo.net/icondata/"
 USER_AGENT = "NUSspli-ccs-mirror"
 CHUNK = 64 * 1024
