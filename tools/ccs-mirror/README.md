@@ -45,15 +45,34 @@ A file is looked up under the name the console asked for, so the icon of
 asking for a version wants `0005000010101D00-16.idbe`. The upstream wins
 whenever it answers, so the folder only fills the holes.
 
-Two things this does not answer:
+Where such a file comes from is the catch: any `.idbe` of that title, from a
+console that still has it or from an archive. For a title Nintendo dropped
+there may be nowhere left to get one, which is what the next part is for.
 
-- **Where the file comes from.** Any `.idbe` of that title, from a console
-  that still has it or from an archive. The mirror serves the bytes, it does
-  not make them.
-- **Whether the console minds an icon of another title.** Serving a different
-  title's `.idbe` to get past 105-1017 was not tried here. If the system only
-  needs the fetch to succeed it works and shows the wrong picture; if it
-  checks the title ID inside, it does not.
+### An icon made here
+
+`--idbe-generate` makes the icon instead of looking for it:
+
+```
+--idbe-generate
+```
+
+The format is written down - the first byte is zero, the second picks one of
+four AES-128 keys, the rest is CBC with a fixed IV, and the decrypted data
+holds a SHA-256 of itself, the title ID, a magic, the names and a TGA - so
+`idbe.py` builds exactly that for the title the console asked for: its own
+title ID and version, its title ID as the name and a plain grey 128 by 128
+square as the picture. It needs nothing installed, the AES is in the file.
+
+An icon from `--idbe-dir` wins over one made here, and both only answer where
+Nintendo does not. `python3 idbe.py` checks the AES against the vector of
+FIPS-197 and the layout against the format.
+
+**What this cannot say** is whether the console is happy with it. The icon
+carries the right title ID and a hash over itself that matches, so everything
+that can be checked here is right, but it was never handed to a console: that
+is the one thing left to find out. Wherever the system shows the picture it
+will be a grey square.
 
 ## What it does not do
 
@@ -128,7 +147,7 @@ From the PC (replace `VM` and `ZONE` with your instance name and zone):
 
 ```bash
 gcloud compute scp --zone ZONE \
-    ccs_mirror.py ccs-mirror.service \
+    ccs_mirror.py idbe.py ccs-mirror.service \
     /path/to/SSSL/cert-chain.pem /path/to/SSSL/ssl-cert-private-key.pem \
     VM:~
 ```
@@ -139,10 +158,10 @@ Then on the VM (`gcloud compute ssh VM --zone ZONE`):
 sudo apt-get update && sudo apt-get install -y python3
 sudo install -d -m 755 /opt/ccs-mirror
 sudo install -d -m 700 /etc/ccs-mirror
-sudo install -m 644 ccs_mirror.py /opt/ccs-mirror/
+sudo install -m 644 ccs_mirror.py idbe.py /opt/ccs-mirror/
 sudo install -m 600 cert-chain.pem ssl-cert-private-key.pem /etc/ccs-mirror/
 sudo install -m 644 ccs-mirror.service /etc/systemd/system/
-rm ccs_mirror.py ccs-mirror.service cert-chain.pem ssl-cert-private-key.pem
+rm ccs_mirror.py idbe.py ccs-mirror.service cert-chain.pem ssl-cert-private-key.pem
 ```
 
 Allow only your home. Find your public IP on the PC with
