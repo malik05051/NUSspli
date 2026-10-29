@@ -195,5 +195,6 @@
     "unknown": "anhysbys",
     "Yes": "Ie",
     "No": "Na",
-    "File": "Ffeil"
+    "File": "Ffeil",
+    "A download in the install folder of the SD card is finished but was\nnever installed.\n\nOpen the installer?": "Mae lawrlwythiad yn ffolder gosod y cerdyn SD wedi gorffen ond ni\nchafodd ei osod erioed.\n\nAgor y gosodwr?"
 }

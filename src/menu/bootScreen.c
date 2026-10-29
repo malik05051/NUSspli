@@ -29,6 +29,7 @@
 #include <ioQueue.h>
 #include <menu/bootScreen.h>
 #include <menu/main.h>
+#include <menu/pending.h>
 #include <menu/utils.h>
 #include <notifications.h>
 #include <queue.h>
@@ -156,6 +157,9 @@ static void updateBootScreen()
     // instead of sitting below it for the rest of the app life.
     initFSSpace();
     checkStacks("main");
+    // A download that finished but was never installed sits complete on the
+    // SD card and is installed by nobody: say so before the menu opens.
+    offerPendingInstalls();
     uiPop();
     mainMenu();
 }

@@ -206,5 +206,6 @@
     "unknown": "sconosciuto",
     "Yes": "Sì",
     "No": "No",
-    "File": "File"
+    "File": "File",
+    "A download in the install folder of the SD card is finished but was\nnever installed.\n\nOpen the installer?": "Un download nella cartella di installazione della scheda SD \u00E8\nfinito ma non \u00E8 mai stato installato.\n\nAprire l'installazione?"
 }

@@ -201,5 +201,6 @@
     "unknown": "bilinmeyen",
     "Yes": "Evet",
     "No": "Hayır",
-    "File": "Dosya"
+    "File": "Dosya",
+    "A download in the install folder of the SD card is finished but was\nnever installed.\n\nOpen the installer?": "SD karttaki kurulum klas\u00F6r\u00FCnde bir indirme bitti ama hi\u00E7\ny\u00FCklenmedi.\n\nY\u00FCkleyici a\u00E7\u0131ls\u0131n m\u0131?"
 }

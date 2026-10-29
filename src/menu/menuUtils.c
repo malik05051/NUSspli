@@ -258,7 +258,7 @@ static const UIScreen yesNoDialog = {
 
 // Shows msg as an overlay and blocks until the user picked an answer.
 // Returns false on B or when the overlay couldn't be created.
-static bool askYesNo(const char *msg)
+bool askYesNo(const char *msg)
 {
     yesNoOverlay = uiShowOverlay(msg);
     if(yesNoOverlay == NULL)
