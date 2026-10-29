@@ -725,8 +725,12 @@ static bool pdSystemDownload()
 
     if(!hasTicket(pdTmd->tid))
     {
+        // The Download Management installs with the ticket the console has,
+        // so the way to make it install a title without one is to put one
+        // there. That writes to the store the licences live in, which is
+        // asked about on its own before the question below.
         snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-            localise("There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?"),
+            localise("Experimental: NUSspli can put a ticket for this title on the console,\nwhich is what the Wii U Download Management installs with.\n\nThis writes to the ticket store of the console. The file it adds to is\ncopied to NUSspli-tickets on the SD card first and put back if the\nticket does not take.\n\nPut a ticket on the console?"),
             localise("Yes"), localise("No"));
         ans = pdAskAnswer(uiShowOverlay(txt));
         if(ans < 0)
@@ -735,8 +739,41 @@ static bool pdSystemDownload()
             return false;
         }
 
-        if(ans == 0)
-            return false;
+        if(ans == 1)
+        {
+            pdNimWait();
+            TICKET_PLANT_RESULT planted = plantTicket(pdTmd);
+            readInput();
+
+            if(planted == TICKET_PLANT_NO_TICKET)
+            {
+                showErrorFrame(localise("There is no ticket for this title to be had."));
+                return false;
+            }
+
+            if(planted != TICKET_PLANT_OK && planted != TICKET_PLANT_OK_FAKE && planted != TICKET_PLANT_EXISTS)
+            {
+                showErrorFrame(localise("Could not put a ticket on the console.\nThe ticket store was left the way it was."));
+                return false;
+            }
+
+            addToScreenLog("A ticket for \"%s\" is on the console now", pdEntry->name);
+        }
+        else
+        {
+            snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
+                localise("There is no ticket for this title on the console,\nso the Wii U Download Management will probably fail to install it.\n\nAdd it anyway?"),
+                localise("Yes"), localise("No"));
+            ans = pdAskAnswer(uiShowOverlay(txt));
+            if(ans < 0)
+            {
+                pdFinish(0);
+                return false;
+            }
+
+            if(ans == 0)
+                return false;
+        }
     }
 
     pdNimWait();
