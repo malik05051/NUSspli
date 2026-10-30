@@ -57,8 +57,7 @@ extern "C"
     // nn::nim::TitlePackageTaskConfig, as Cemu fills it for the eShop.
     typedef struct WUT_PACKED
     {
-        uint32_t titleIdHigh;
-        uint32_t titleIdLow;
+        uint64_t titleId;
         uint32_t titleVersion; // Cemu calls it region or language, see nimMakeConfig()
         uint8_t titleType;
         uint8_t applicationBoxDevice1;
@@ -68,7 +67,7 @@ extern "C"
         uint8_t postDownloadAction;
         WUT_UNKNOWN_BYTES(1);
     } NimTitlePackageTaskConfig;
-    WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x00, titleIdHigh);
+    WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x00, titleId);
     WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x08, titleVersion);
     WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x0C, titleType);
     WUT_CHECK_OFFSET(NimTitlePackageTaskConfig, 0x0F, applicationBoxDevice2);

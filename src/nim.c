@@ -66,8 +66,7 @@ NNResult nimInitialize()
 void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version)
 {
     OSBlockSet(config, 0, sizeof(NimTitlePackageTaskConfig));
-    config->titleIdHigh = (uint32_t)(tid >> 32);
-    config->titleIdLow = (uint32_t)tid;
+    config->titleId = tid;
     // Cemu names the word at 0x08 region or language and leaves it 0, after
     // the int the eShop hands its config call along with the title ID and
     // the type. It is the version of the title: the system fetched tmd.0 of
