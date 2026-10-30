@@ -78,7 +78,8 @@ extern "C"
     // NNResult stops the handoff on a failure, and nimFinalize() closes
     // what nimInitialize() opened.
     NNResult nimInitialize();
-    void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version);
+    // toUSB installs to the USB drive instead of the internal memory.
+    void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version, bool toUSB);
     // What the Download Management holds: up to max title IDs, each with
     // the info block of its package (0x50 bytes in Cemu), and how many.
 #define NIM_PACKAGE_INFO_SIZE 0x50

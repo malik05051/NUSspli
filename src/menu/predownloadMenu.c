@@ -665,7 +665,7 @@ static void pdSystemDownload()
     }
 
     NimTitlePackageTaskConfig config __attribute__((__aligned__(0x40)));
-    nimMakeConfig(&config, pdTmd->tid, pdTmd->title_version);
+    nimMakeConfig(&config, pdTmd->tid, pdTmd->title_version, (instDev & NUSDEV_USB) != 0);
     res = nimRegister(&config, pdTmd->tid);
     if(NNResult_IsFailure(res))
     {
