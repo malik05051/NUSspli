@@ -231,6 +231,7 @@ static bool qmSystemDownload()
         bool installs = data != NULL && (data->operation & OPERATION_INSTALL);
         uint64_t tid = data == NULL ? 0 : data->tmd->tid;
         uint16_t tver = data == NULL ? 0 : data->tmd->title_version;
+        bool toUSB = data != NULL && data->toUSB;
         unlockQueue();
 
         // It installs with the ticket the console has, so without one it
@@ -242,7 +243,7 @@ static bool qmSystemDownload()
             continue;
         }
 
-        nimMakeConfig(&config, tid, tver);
+        nimMakeConfig(&config, tid, tver, toUSB);
         res = nimRegister(&config, tid);
         if(NNResult_IsFailure(res))
         {
@@ -278,7 +279,7 @@ static bool qmSystemDownload()
     if(handed == 0)
     {
         if(refused == 0)
-            showErrorFrame(localise("The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself."));
+            showErrorFrame(localise("The Wii U Download Management can take none of these entries: it\nonly takes titles that install, and it needs the ticket of a title on\nthe console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself."));
 
         return false;
     }

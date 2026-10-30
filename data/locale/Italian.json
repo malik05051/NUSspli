@@ -234,5 +234,5 @@
     "Could not put a ticket on the console.\nThe ticket store was left the way it was.": "Impossibile mettere un ticket sulla console.\nL'archivio ticket \u00E8 rimasto com'era.",
     "It stays in the queue, NUSspli downloads it itself.": "Resta in coda, NUSspli lo scarica da s\u00E9.",
     "\uE003 Download Management": "\uE003 Gestione download",
-    "The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself.": "La gestione download di Wii U non pu\u00F2 prendere nessuna di queste\nvoci: installa sempre nella memoria interna e le serve il ticket di\nun titolo sulla console, che ha un titolo installato una volta da\nNUSspli. NUSspli scarica il resto da s\u00E9."
+    "The Wii U Download Management can take none of these entries: it\nonly takes titles that install, and it needs the ticket of a title on\nthe console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself.": "La gestione download di Wii U non pu\u00F2 prendere nessuna di queste\nvoci: accetta solo titoli da installare, e le serve il ticket di un\ntitolo sulla console, che ha un titolo installato una volta da NUSspli.\nNUSspli scarica il resto da s\u00E9."
 }
