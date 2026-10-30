@@ -21,6 +21,7 @@
 #include <stdint.h>
 
 #include <nim.h>
+#include <titles.h>
 #include <tmd.h>
 #include <utils.h>
 
@@ -74,11 +75,20 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t ver
     // server), which does not exist and was the 404 behind 105-0955, and the
     // version 0 of YouTube that does exist is what it installed.
     config->titleVersion = version;
-    // The values of nn::Cafe::TitleType are not documented. The category of
-    // the title ID fits the byte (0x00 for a game, 0x02 for a demo, 0x0C
-    // for DLC, 0x0E for an update) and the system accepted it for both an
-    // application and an update.
-    config->titleType = (uint8_t)(tid >> 32);
+    // The values of nn::Cafe::TitleType are not documented, and the category
+    // byte of the title ID is not one of them: with 0x02 a 5.5.5E console
+    // installed a demo as additional content, listed as such in the Download
+    // Management and never shown on the Wii U Menu, and 0x0C and 0x0E left
+    // the Download Management blank. What that console showed instead: 0
+    // works for a game, an update the system registered on its own carried
+    // 1, and 2 is additional content. A demo is an application the Wii U
+    // Menu starts like a game, so it takes 0 as well.
+    if(isUpdate(tid))
+        config->titleType = 1;
+    else if(isDLC(tid))
+        config->titleType = 2;
+    else
+        config->titleType = 0;
     // 1 is the internal memory in Cemu, the eShop reads these two to find
     // the device of the title. A 5.5.5E console installed YouTube there.
     config->applicationBoxDevice1 = 1;
