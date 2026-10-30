@@ -79,10 +79,10 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t ver
     // byte of the title ID is not one of them: with 0x02 a 5.5.5E console
     // installed a demo as additional content, listed as such in the Download
     // Management and never shown on the Wii U Menu, and 0x0C and 0x0E left
-    // the Download Management blank. What that console showed instead: 0
-    // works for a game, an update the system registered on its own carried
-    // 1, and 2 is additional content. A demo is an application the Wii U
-    // Menu starts like a game, so it takes 0 as well.
+    // the Download Management blank. With the values below the same console
+    // installed all four kinds of title: 0 for a game and for a demo, 1 for
+    // an update, the value an update package the system registered on its
+    // own carried, and 2 for additional content.
     if(isUpdate(tid))
         config->titleType = 1;
     else if(isDLC(tid))

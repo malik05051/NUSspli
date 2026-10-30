@@ -197,7 +197,6 @@
     "No": "Na",
     "File": "Ffeil",
     "The Wii U Download Management refused the title.": "Gwrthododd Rheoli Lawrlwythiadau'r Wii U y teitl.",
-    "The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nAdd it to the queue, to download and install it with NUSspli instead?": "Nid yw Rheoli Lawrlwythiadau'r Wii U yn derbyn diweddariadau na DLC:\nwedi'u rhoi iddo, gadawsant ef yn wag.\n\nEi ychwanegu at y ciw, i'w lawrlwytho a'i osod gyda NUSspli yn lle\nhynny?",
     "Experimental: NUSspli can put a ticket for this title on the console,\nwhich is what the Wii U Download Management installs with.\n\nThis writes to the ticket store of the console. The file it adds to is\ncopied to NUSspli-tickets on the SD card first and put back if the\nticket does not take.\n\nPut a ticket on the console?": "Arbrofol: gall NUSspli roi tocyn ar gyfer y teitl hwn ar y consol,\ndyna mae Rheoli Lawrlwythiadau'r Wii U yn gosod ag ef.\n\nMae hyn yn ysgrifennu i storfa docynnau'r consol. Mae'r ffeil sy'n\ncael ei newid yn cael ei chop\u00EFo i NUSspli-tickets ar y cerdyn SD yn\ngyntaf, a'i rhoi yn \u00F4l os nad yw'r tocyn yn gafael.\n\nRhoi tocyn ar y consol?",
     "There is no ticket for this title to be had.": "Does dim tocyn i'w gael ar gyfer y teitl hwn.",
     "Could not put a ticket on the console.\nThe ticket store was left the way it was.": "Methwyd rhoi tocyn ar y consol.\nGadawyd storfa'r tocynnau fel yr oedd.",

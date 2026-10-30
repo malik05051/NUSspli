@@ -203,7 +203,6 @@
     "No": "Hayır",
     "File": "Dosya",
     "The Wii U Download Management refused the title.": "Wii U \u0130ndirme Y\u00F6netimi ba\u015Fl\u0131\u011F\u0131 reddetti.",
-    "The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nAdd it to the queue, to download and install it with NUSspli instead?": "Wii U \u0130ndirme Y\u00F6netimi g\u00FCncellemeleri ve DLC'leri kabul etmez:\nona verildiklerinde onu bo\u015F b\u0131rakt\u0131lar.\n\nBunun yerine NUSspli ile indirip y\u00FCklemek i\u00E7in kuyru\u011Fa eklensin mi?",
     "Experimental: NUSspli can put a ticket for this title on the console,\nwhich is what the Wii U Download Management installs with.\n\nThis writes to the ticket store of the console. The file it adds to is\ncopied to NUSspli-tickets on the SD card first and put back if the\nticket does not take.\n\nPut a ticket on the console?": "Deneysel: NUSspli bu ba\u015Fl\u0131k i\u00E7in konsola bir bilet koyabilir, Wii U\n\u0130ndirme Y\u00F6netimi bununla y\u00FCkler.\n\nBu, konsolun bilet deposuna yazar. De\u011Fi\u015Ftirilen dosya \u00F6nce SD\nkarttaki NUSspli-tickets klas\u00F6r\u00FCne kopyalan\u0131r ve bilet tutmazsa\ngeri konur.\n\nKonsola bir bilet konsun mu?",
     "There is no ticket for this title to be had.": "Bu ba\u015Fl\u0131k i\u00E7in al\u0131nabilecek bir bilet yok.",
     "Could not put a ticket on the console.\nThe ticket store was left the way it was.": "Konsola bir bilet konulamad\u0131.\nBilet deposu oldu\u011Fu gibi b\u0131rak\u0131ld\u0131.",

@@ -208,7 +208,6 @@
     "No": "No",
     "File": "File",
     "The Wii U Download Management refused the title.": "La gestione download di Wii U ha rifiutato il titolo.",
-    "The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nAdd it to the queue, to download and install it with NUSspli instead?": "La gestione download di Wii U non accetta aggiornamenti n\u00E9 DLC:\nconsegnati a lei, l'hanno lasciata vuota.\n\nAggiungerlo alla coda, per scaricarlo e installarlo con NUSspli invece?",
     "Experimental: NUSspli can put a ticket for this title on the console,\nwhich is what the Wii U Download Management installs with.\n\nThis writes to the ticket store of the console. The file it adds to is\ncopied to NUSspli-tickets on the SD card first and put back if the\nticket does not take.\n\nPut a ticket on the console?": "Sperimentale: NUSspli pu\u00F2 mettere un ticket per questo titolo sulla\nconsole, che \u00E8 ci\u00F2 con cui installa la gestione download di Wii U.\n\nQuesto scrive nell'archivio ticket della console. Il file toccato\nviene prima copiato in NUSspli-tickets sulla scheda SD e rimesso a\nposto se il ticket non attecchisce.\n\nMettere un ticket sulla console?",
     "There is no ticket for this title to be had.": "Non \u00E8 disponibile alcun ticket per questo titolo.",
     "Could not put a ticket on the console.\nThe ticket store was left the way it was.": "Impossibile mettere un ticket sulla console.\nL'archivio ticket \u00E8 rimasto com'era.",
