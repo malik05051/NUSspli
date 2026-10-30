@@ -676,29 +676,27 @@ void systemDownloadsInfo()
 
 // Hands the title to the Wii U Download Management instead of downloading
 // it here: the system downloads and installs it in the background and lists
-// it there, see nim.h. Only a game goes there: an update, a DLC or a demo
-// goes to NUSspli's own download instead, and a game without a ticket gets
-// a warning first. Returns true in the first case, with the post phase set
-// up to queue the title and run the queue in the background.
+// it there, see nim.h. An update or a DLC goes to NUSspli's own download
+// instead, and a title without a ticket gets a warning first. Returns true
+// in the first case, with the post phase set up to queue the title and run
+// the queue in the background.
 static bool pdSystemDownload()
 {
     char txt[1024];
     int ans;
 
-    // Only a game goes to the Wii U Download Management. A 5.5.5E console
-    // that held a DLC handed over this way showed a blank Download Management
-    // and a Wii U Menu without icons, updates and demos did the same, and an
-    // update without its ticket does not install there anyway (105-3683).
-    // The title type in the task config is the likely cause: it takes the
-    // category byte of the title ID, which is right for a game, while an
-    // update the system registered on its own carried a 1 there. Until that
-    // is understood the rest goes to NUSspli's own download, in the
-    // background like everything the download manager runs, which installs
-    // the ticket with the title.
-    if(!isGame(pdTmd->tid))
+    // An update or a DLC handed over this way left the Download Management of
+    // a 5.5.5E console blank, while games and demos went through. The title
+    // type in the task config is the likely cause: it takes the category
+    // byte of the title ID, 0x00 for a game and 0x02 for a demo, while an
+    // update the system registered on its own carried a 1 there instead of
+    // 0x0E. Until the right values are known, both go to NUSspli's own
+    // download, in the background like everything the download manager runs,
+    // which installs the ticket with the title.
+    if(isUpdate(pdTmd->tid) || isDLC(pdTmd->tid))
     {
         snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-            localise("The Wii U Download Management only takes games. Updates, DLC and\ndemos handed to it left it blank and the Wii U Menu without icons.\n\nDownload and install this with NUSspli in the background instead?"),
+            localise("The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nDownload and install this with NUSspli in the background instead?"),
             localise("Yes"), localise("No"));
         ans = pdAskAnswer(uiShowOverlay(txt));
         if(ans < 0)

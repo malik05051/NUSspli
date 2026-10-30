@@ -233,13 +233,12 @@ static bool qmSystemDownload()
         uint16_t tver = data == NULL ? 0 : data->tmd->title_version;
         unlockQueue();
 
-        // Only a game goes there, see pdSystemDownload(): an update, a DLC
-        // or a demo left the Download Management blank and the Wii U Menu
-        // without icons. And it installs with the ticket the console has, so
-        // without one it downloads the title but fails to install it
+        // An update or a DLC left the Download Management blank, see
+        // pdSystemDownload(). And it installs with the ticket the console
+        // has, so without one it downloads the title but fails to install it
         // (105-3683, see nim.h). The check reads files, so it runs without
         // the lock.
-        if(!installs || !isGame(tid) || !hasTicket(tid))
+        if(!installs || isUpdate(tid) || isDLC(tid) || !hasTicket(tid))
         {
             ++kept;
             continue;
@@ -281,7 +280,7 @@ static bool qmSystemDownload()
     if(handed == 0)
     {
         if(refused == 0)
-            showErrorFrame(localise("The Wii U Download Management can take none of these entries: it\nonly takes games, always installs to the internal memory and needs\nthe ticket of a title on the console, which a title NUSspli installed\nonce has. NUSspli downloads the rest itself."));
+            showErrorFrame(localise("The Wii U Download Management can take none of these entries: it\ntakes no updates or DLC, always installs to the internal memory and\nneeds the ticket of a title on the console, which a title NUSspli\ninstalled once has. NUSspli downloads the rest itself."));
 
         return false;
     }
