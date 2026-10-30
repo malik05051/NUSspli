@@ -686,13 +686,13 @@ static bool pdSystemDownload()
     int ans;
 
     // An update or a DLC handed over this way left the Download Management of
-    // a 5.5.5E console blank, while games and demos went through. The title
-    // type in the task config is the likely cause: it takes the category
-    // byte of the title ID, 0x00 for a game and 0x02 for a demo, while an
-    // update the system registered on its own carried a 1 there instead of
-    // 0x0E. Until the right values are known, both go to NUSspli's own
-    // download, in the background like everything the download manager runs,
-    // which installs the ticket with the title.
+    // a 5.5.5E console blank. The title type in the task config was the
+    // category byte of the title ID back then, 0x0E and 0x0C, which the
+    // system does not know. nimMakeConfig() now sends the values that console
+    // showed instead, 1 for an update and 2 for additional content, but
+    // neither has been handed over with them yet. Until one has, both go to
+    // NUSspli's own download, in the background like everything the download
+    // manager runs, which installs the ticket with the title.
     if(isUpdate(pdTmd->tid) || isDLC(pdTmd->tid))
     {
         snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",

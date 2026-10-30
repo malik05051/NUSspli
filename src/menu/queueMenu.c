@@ -233,7 +233,8 @@ static bool qmSystemDownload()
         uint16_t tver = data == NULL ? 0 : data->tmd->title_version;
         unlockQueue();
 
-        // An update or a DLC left the Download Management blank, see
+        // An update or a DLC is kept out of the Download Management until
+        // the title types of nimMakeConfig() are tried, see
         // pdSystemDownload(). And it installs with the ticket the console
         // has, so without one it downloads the title but fails to install it
         // (105-3683, see nim.h). The check reads files, so it runs without
