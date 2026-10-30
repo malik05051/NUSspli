@@ -231,6 +231,7 @@ static bool qmSystemDownload()
         bool installs = data != NULL && (data->operation & OPERATION_INSTALL);
         uint64_t tid = data == NULL ? 0 : data->tmd->tid;
         uint16_t tver = data == NULL ? 0 : data->tmd->title_version;
+        bool toUSB = data != NULL && data->toUSB;
         unlockQueue();
 
         // It installs with the ticket the console has, so without one it
@@ -242,7 +243,7 @@ static bool qmSystemDownload()
             continue;
         }
 
-        nimMakeConfig(&config, tid, tver);
+        nimMakeConfig(&config, tid, tver, toUSB);
         res = nimRegister(&config, tid);
         if(NNResult_IsFailure(res))
         {

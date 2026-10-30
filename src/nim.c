@@ -64,7 +64,7 @@ NNResult nimInitialize()
 // title type of 0 and a region of 0. Cemu only stubs it, so whatever it
 // checks or reads on a console is unknown: the config is filled here the
 // way Cemu fills it instead, which is what the eShop runs with in Cemu.
-void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version)
+void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t version, bool toUSB)
 {
     OSBlockSet(config, 0, sizeof(NimTitlePackageTaskConfig));
     config->titleIdHigh = (uint32_t)(tid >> 32);
@@ -90,10 +90,12 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t ver
         config->titleType = 2;
     else
         config->titleType = 0;
-    // 1 is the internal memory in Cemu, the eShop reads these two to find
-    // the device of the title. A 5.5.5E console installed YouTube there.
-    config->applicationBoxDevice1 = 1;
-    config->applicationBoxDevice2 = 1;
+    // The eShop reads these two to find the device of the title. 1 is the
+    // internal memory in Cemu, and a 5.5.5E console installed YouTube there.
+    // An update the same console registered on its own, for Mario Kart 8 on
+    // a USB drive, carried 2 in both, so 2 is taken to be the USB drive.
+    config->applicationBoxDevice1 = toUSB ? 2 : 1;
+    config->applicationBoxDevice2 = config->applicationBoxDevice1;
     // Byte 0x15 is set to 1 by Cemu, its meaning is unknown.
     ((uint8_t *)config)[0x15] = 1;
     // Cemu notes 2 as "use the background install policy". On a 5.5.5E
