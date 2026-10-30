@@ -676,23 +676,27 @@ void systemDownloadsInfo()
 
 // Hands the title to the Wii U Download Management instead of downloading
 // it here: the system downloads and installs it in the background and lists
-// it there, see nim.h. It installs with the ticket the console has, so a
-// game without one gets a warning first and an update without one goes to
-// NUSspli's own download instead. Returns true in that case, with the post
-// phase set up to queue the title and run the queue in the background.
+// it there, see nim.h. An update or a DLC goes to NUSspli's own download
+// instead, and a title without a ticket gets a warning first. Returns true
+// in the first case, with the post phase set up to queue the title and run
+// the queue in the background.
 static bool pdSystemDownload()
 {
     char txt[1024];
     int ans;
 
-    // An update without its ticket on the console downloads in the Wii U
-    // Download Management but does not install (105-3683). NUSspli's own
-    // download installs the ticket with it, so the update goes there instead,
-    // in the background like everything the download manager runs.
-    if(isUpdate(pdTmd->tid) && !hasTicket(pdTmd->tid))
+    // An update or a DLC handed over this way left the Download Management of
+    // a 5.5.5E console blank. The title type in the task config was the
+    // category byte of the title ID back then, 0x0E and 0x0C, which the
+    // system does not know. nimMakeConfig() now sends the values that console
+    // showed instead, 1 for an update and 2 for additional content, but
+    // neither has been handed over with them yet. Until one has, both go to
+    // NUSspli's own download, in the background like everything the download
+    // manager runs, which installs the ticket with the title.
+    if(isUpdate(pdTmd->tid) || isDLC(pdTmd->tid))
     {
         snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-            localise("There is no ticket for this update on the console, so the Wii U\nDownload Management would download it but fail to install it.\n\nDownload and install it with NUSspli in the background instead?\nNUSspli installs the ticket with it."),
+            localise("The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nDownload and install this with NUSspli in the background instead?"),
             localise("Yes"), localise("No"));
         ans = pdAskAnswer(uiShowOverlay(txt));
         if(ans < 0)
