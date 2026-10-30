@@ -233,8 +233,7 @@
     "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?": "It is already in the Download Management.\nRemove it from there, with what it downloaded so far?",
     "Removed from the Wii U Download Management!": "Removed from the Wii U Download Management!",
     "Wii U Download Management": "Wii U Download Management",
-    "The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nDownload and install this with NUSspli in the background instead?": "The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nDownload and install this with NUSspli in the background instead?",
 
     "\uE003 Download Management": "\uE003 Download Management",
-    "The Wii U Download Management can take none of these entries: it\ntakes no updates or DLC, always installs to the internal memory and\nneeds the ticket of a title on the console, which a title NUSspli\ninstalled once has. NUSspli downloads the rest itself.": "The Wii U Download Management can take none of these entries: it\ntakes no updates or DLC, always installs to the internal memory and\nneeds the ticket of a title on the console, which a title NUSspli\ninstalled once has. NUSspli downloads the rest itself."
+    "The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself.": "The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself."
 }
