@@ -279,7 +279,7 @@ static bool qmSystemDownload()
     if(handed == 0)
     {
         if(refused == 0)
-            showErrorFrame(localise("The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself."));
+            showErrorFrame(localise("The Wii U Download Management can take none of these entries: it\nonly takes titles that install, and it needs the ticket of a title on\nthe console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself."));
 
         return false;
     }

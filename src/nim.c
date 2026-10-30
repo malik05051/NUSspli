@@ -93,7 +93,8 @@ void nimMakeConfig(NimTitlePackageTaskConfig *config, uint64_t tid, uint16_t ver
     // The eShop reads these two to find the device of the title. 1 is the
     // internal memory in Cemu, and a 5.5.5E console installed YouTube there.
     // An update the same console registered on its own, for Mario Kart 8 on
-    // a USB drive, carried 2 in both, so 2 is taken to be the USB drive.
+    // a USB drive, carried 2 in both, and a title handed over with 2 was
+    // installed to the USB drive of that console.
     config->applicationBoxDevice1 = toUSB ? 2 : 1;
     config->applicationBoxDevice2 = config->applicationBoxDevice1;
     // Byte 0x15 is set to 1 by Cemu, its meaning is unknown.

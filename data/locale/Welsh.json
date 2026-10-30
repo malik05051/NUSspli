@@ -223,5 +223,5 @@
     "Could not put a ticket on the console.\nThe ticket store was left the way it was.": "Methwyd rhoi tocyn ar y consol.\nGadawyd storfa'r tocynnau fel yr oedd.",
     "It stays in the queue, NUSspli downloads it itself.": "Mae'n aros yn y ciw, mae NUSspli yn ei lawrlwytho ei hun.",
     "\uE003 Download Management": "\uE003 Rheoli Lawrlwythiadau",
-    "The Wii U Download Management can take none of these entries: it\nalways installs to the internal memory and needs the ticket of a\ntitle on the console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself.": "Ni all Rheoli Lawrlwythiadau'r Wii U gymryd yr un o'r cofnodion\nhyn: mae bob amser yn gosod i'r cof mewnol ac mae angen tocyn teitl\nar y consol arno, sydd gan deitl a osodwyd unwaith gan NUSspli.\nMae NUSspli yn lawrlwytho'r gweddill ei hun."
+    "The Wii U Download Management can take none of these entries: it\nonly takes titles that install, and it needs the ticket of a title on\nthe console, which a title NUSspli installed once has.\nNUSspli downloads the rest itself.": "Ni all Rheoli Lawrlwythiadau'r Wii U gymryd yr un o'r cofnodion\nhyn: dim ond teitlau i'w gosod y mae'n eu derbyn, ac mae angen tocyn\nteitl ar y consol arno, sydd gan deitl a osodwyd unwaith gan NUSspli.\nMae NUSspli yn lawrlwytho'r gweddill ei hun."
 }
