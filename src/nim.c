@@ -215,8 +215,11 @@ const char *nimErrorReason(int32_t code)
             // still answers for it. A console that does not get one is
             // usually asking somewhere else: Inkay patches the icon server
             // out of nim-boss, and the one it writes there has no icons, so
-            // every handoff fails while that plugin is loaded.
-            return "The icon of this title could not be downloaded.\nA Pretendo install (Inkay) redirects the icon server of Nintendo,\nso turn that plugin off and try again.";
+            // every handoff fails while that plugin is loaded. A Pretendo
+            // account needs Inkay though: without it the Wii U Menu of a
+            // 5.5.5E console came up without icons, while a user with a
+            // Nintendo Network ID was fine, so the advice names that user.
+            return "The icon of this title could not be downloaded.\nA Pretendo install (Inkay) redirects the icon server of Nintendo,\nso turn that plugin off and try again, with a user that has a\nNintendo Network ID: without Inkay a Pretendo account left the Wii U\nMenu without icons.";
     }
 
     return NULL;
