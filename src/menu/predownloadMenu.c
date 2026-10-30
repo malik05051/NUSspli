@@ -685,37 +685,11 @@ static bool pdSystemDownload()
     char txt[1024];
     int ans;
 
-    // A DLC handed over this way left the Download Management of a 5.5.5E
+    // Updates and DLC used to leave the Download Management of a 5.5.5E
     // console blank, back when the title type in the task config was the
-    // category byte of the title ID, 0x0C, which the system does not know.
-    // nimMakeConfig() now sends 2 for additional content, the value that
-    // console showed, but no DLC has been handed over with it yet. Until one
-    // has, a DLC goes to NUSspli's own download, in the background like
-    // everything the download manager runs. An update goes to the Download
-    // Management with 1, the value an update package the system registered
-    // on its own carried.
-    if(isDLC(pdTmd->tid))
-    {
-        snprintf(txt, sizeof(txt), "%s\n\n" BUTTON_A " %s || " BUTTON_B " %s",
-            localise("The Wii U Download Management does not take updates or DLC:\nhanded to it, they left it blank.\n\nDownload and install this with NUSspli in the background instead?"),
-            localise("Yes"), localise("No"));
-        ans = pdAskAnswer(uiShowOverlay(txt));
-        if(ans < 0)
-        {
-            pdFinish(0);
-            return false;
-        }
-
-        if(ans == 0)
-            return false;
-
-        operation = OPERATION_DOWNLOAD_INSTALL;
-        pdToQueue = true;
-        pdInBackground = true;
-        pdMenuActive = false;
-        return true;
-    }
-
+    // category byte of the title ID. With the values nimMakeConfig() sends
+    // now an update installed there, and a DLC is handed over with 2 to find
+    // out whether it does as well.
     if(!hasTicket(pdTmd->tid))
     {
         // The Download Management installs with the ticket the console has,
