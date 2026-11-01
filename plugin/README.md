@@ -54,9 +54,10 @@ whenever you like, and the rest of the download follows while you play.
   reaches titles nobody bought as well: a 5.5.5E console downloaded and
   installed them in standby.
 
-  Two things to know when a handoff is refused with 105-1017. The icon of the
+  One thing to know when a handoff is refused with 105-1017. The icon of the
   title is fetched before anything else, and a Pretendo install patches that
-  server out of nim-boss (see `tools/ccs-mirror/README.md`), so every handoff
+  server out of nim-boss (see
+  https://github.com/PretendoNetwork/Inkay/issues/90), so every handoff
   fails while the plugin is loaded. The plugin here needs neither a ticket nor
   an icon and downloads whatever NUSspli can, wherever NUSspli puts it.
 
