@@ -303,7 +303,7 @@ static const UIScreen yesNoDialog = {
     .leave = leaveYesNoDialog,
 };
 
-bool askYesNo(const char *msg)
+static bool askYesNo(const char *msg)
 {
     yesNoOverlay = uiShowOverlay(msg);
     if(yesNoOverlay == NULL)
